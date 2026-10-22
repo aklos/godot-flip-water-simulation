@@ -1,0 +1,12 @@
+# SCons
+.sconsign*.dblite
+*.os
+*.o
+*.obj
+
+# Build output
+demo/addons/flip_water_simulation/bin/*
+!demo/addons/flip_water_simulation/bin/.gitkeep
+
+# Godot
+.godot/

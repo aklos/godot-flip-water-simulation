@@ -1,11 +1,11 @@
-#ifndef GDEXAMPLE_REGISTER_TYPES_H
-#define GDEXAMPLE_REGISTER_TYPES_H
+#ifndef FLIP_SIM_REGISTER_TYPES_H
+#define FLIP_SIM_REGISTER_TYPES_H
 
 #include <godot_cpp/core/class_db.hpp>
 
 using namespace godot;
 
-void initialize_example_module(ModuleInitializationLevel p_level);
-void uninitialize_example_module(ModuleInitializationLevel p_level);
+void initialize_flip_sim_module(ModuleInitializationLevel p_level);
+void uninitialize_flip_sim_module(ModuleInitializationLevel p_level);
 
-#endif // GDEXAMPLE_REGISTER_TYPES_H
+#endif // FLIP_SIM_REGISTER_TYPES_H

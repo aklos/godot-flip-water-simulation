@@ -18,14 +18,14 @@ sources = Glob("src/*.cpp")
 
 if env["platform"] == "macos":
     library = env.SharedLibrary(
-        "demo/bin/libflipsim.{}.{}.framework/libflipsim.{}.{}".format(
+        "demo/addons/flip_water_simulation/bin/libflipsim.{}.{}.framework/libflipsim.{}.{}".format(
             env["platform"], env["target"], env["platform"], env["target"]
         ),
         source=sources,
     )
 else:
     library = env.SharedLibrary(
-        "demo/bin/libflipsim{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
+        "demo/addons/flip_water_simulation/bin/libflipsim{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
         source=sources,
     )
 
