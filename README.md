@@ -2,19 +2,9 @@
 
 A 2D FLIP/PIC fluid simulation for Godot 4.2+, written as a GDExtension in C++. You drop in a `FLIPWaterSimulation` node and it collides with your existing physics bodies and TileMaps, renders itself, and can be driven by emitter, drain, force and sensor nodes.
 
-## Building
-
-```sh
-git submodule update --init
-scons                      # debug build for your platform
-scons target=template_release
-```
-
-You need SCons and a C++17 compiler. The library is written to `demo/addons/flip_water_simulation/bin/`.
-
 ## Installing
 
-Copy `demo/addons/flip_water_simulation/` (including the built `bin/`) into your project's `addons/` folder. Godot loads GDExtensions automatically, so there's nothing to enable under Project Settings → Plugins.
+Download `flip_water_simulation.zip` from the [latest release](https://github.com/aklos/godot-flip-water-simulation/releases/latest) and extract it into your project root. This creates `addons/flip_water_simulation/`, with binaries for Linux (x86_64, arm64), Windows (x86_64) and macOS (universal). Godot loads GDExtensions automatically, so there's nothing to enable under Project Settings → Plugins.
 
 `demo/` is a runnable example. Left drag moves the paddle, right drag paints walls, middle click spawns water, and Space cycles the render modes.
 
@@ -63,6 +53,18 @@ Effectors act on the simulation set in their `simulation` property. If that's em
 | `FLIPDrain` | `radius` | Removes water. Emits `water_drained(count)`. |
 | `FLIPForce` | `mode` (`MODE_RADIAL` / `MODE_DIRECTIONAL`), `strength` (px/s², negative attracts), `radius`, `spread`, `falloff` | Directional mode pushes along +X, and `spread` limits the effect to a cone. |
 | `FLIPSensor` | `size`, `threshold` | `get_particle_count()` and `is_wet()`. Emits `water_entered` and `water_exited`. |
+
+## Building from source
+
+```sh
+git submodule update --init
+scons                      # debug build for your platform
+scons target=template_release
+```
+
+You need SCons and a C++17 compiler. The library is written to `demo/addons/flip_water_simulation/bin/`.
+
+To publish a release, push a tag such as `v1.0.0`. The `Build` workflow compiles every platform and attaches the addon zip to a GitHub release. You can also run it manually from the Actions tab, which only uploads the zip as a workflow artifact.
 
 ## Notes
 
