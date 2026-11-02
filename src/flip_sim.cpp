@@ -27,8 +27,6 @@ using namespace godot;
 
 static const double DENSITY = 1000.0;
 static const double OVER_RELAXATION = 1.9;
-// How fast (in cells per second, per unit of excess density) over-compressed regions are pushed apart.
-static const double DRIFT_COMPENSATION = 5.0;
 static const int MAX_QUERY_RESULTS = 1024;
 static const int RENDER_FLOATS_PER_INSTANCE = 12; // 2D transform (8) + color (4).
 
@@ -115,6 +113,8 @@ void FLIPWaterSimulation::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_gravity"), &FLIPWaterSimulation::get_gravity);
 	ClassDB::bind_method(D_METHOD("set_flip_ratio", "flip_ratio"), &FLIPWaterSimulation::set_flip_ratio);
 	ClassDB::bind_method(D_METHOD("get_flip_ratio"), &FLIPWaterSimulation::get_flip_ratio);
+	ClassDB::bind_method(D_METHOD("set_drift_compensation", "drift_compensation"), &FLIPWaterSimulation::set_drift_compensation);
+	ClassDB::bind_method(D_METHOD("get_drift_compensation"), &FLIPWaterSimulation::get_drift_compensation);
 	ClassDB::bind_method(D_METHOD("set_max_speed", "max_speed"), &FLIPWaterSimulation::set_max_speed);
 	ClassDB::bind_method(D_METHOD("get_max_speed"), &FLIPWaterSimulation::get_max_speed);
 	ClassDB::bind_method(D_METHOD("set_solver_iterations", "iterations"), &FLIPWaterSimulation::set_solver_iterations);
@@ -183,6 +183,7 @@ void FLIPWaterSimulation::_bind_methods() {
 	ADD_GROUP("Simulation", "");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "gravity", PROPERTY_HINT_NONE, "suffix:px/s²"), "set_gravity", "get_gravity");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "flip_ratio", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_flip_ratio", "get_flip_ratio");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "drift_compensation", PROPERTY_HINT_RANGE, "0,10,0.01,or_greater"), "set_drift_compensation", "get_drift_compensation");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_speed", PROPERTY_HINT_RANGE, "0,5000,1,or_greater,suffix:px/s"), "set_max_speed", "get_max_speed");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "solver_iterations", PROPERTY_HINT_RANGE, "1,200,1"), "set_solver_iterations", "get_solver_iterations");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "substeps", PROPERTY_HINT_RANGE, "1,16,1"), "set_substeps", "get_substeps");
@@ -224,6 +225,7 @@ FLIPWaterSimulation::FLIPWaterSimulation() {
 	cell_size = 20.0;
 	gravity = Vector2(0.0, 980.0);
 	flip_ratio = 0.9;
+	drift_compensation = 5.0;
 	max_speed = 0.0;
 	solver_iterations = 30;
 	substeps = 1;
@@ -427,6 +429,14 @@ void FLIPWaterSimulation::set_flip_ratio(double p_flip_ratio) {
 
 double FLIPWaterSimulation::get_flip_ratio() const {
 	return flip_ratio;
+}
+
+void FLIPWaterSimulation::set_drift_compensation(double p_drift) {
+	drift_compensation = std::max(p_drift, 0.0);
+}
+
+double FLIPWaterSimulation::get_drift_compensation() const {
+	return drift_compensation;
 }
 
 void FLIPWaterSimulation::set_max_speed(double p_max_speed) {
@@ -1626,7 +1636,7 @@ void FLIPWaterSimulation::_solve_incompressibility(double dt) {
 }
 
 void FLIPWaterSimulation::_solve_rows_range(int begin, int end) {
-	double drift = DRIFT_COMPENSATION * cell_size;
+	double drift = drift_compensation * cell_size;
 
 	for (int j = begin + 1; j < end + 1; j++) {
 		int i0 = ((1 + j) % 2 == solve_color) ? 1 : 2;

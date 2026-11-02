@@ -63,6 +63,7 @@ private:
 	// Settings.
 	Vector2 gravity;
 	double flip_ratio;
+	double drift_compensation;
 	double max_speed;
 	int solver_iterations;
 	int substeps;
@@ -195,6 +196,8 @@ public:
 	Vector2 get_gravity() const;
 	void set_flip_ratio(double p_flip_ratio);
 	double get_flip_ratio() const;
+	void set_drift_compensation(double p_drift);
+	double get_drift_compensation() const;
 	void set_max_speed(double p_max_speed);
 	double get_max_speed() const;
 	void set_solver_iterations(int p_iterations);

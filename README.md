@@ -25,7 +25,7 @@ Download `flip_water_simulation.zip` from the [latest release](https://github.co
 | Group | Properties |
 | --- | --- |
 | Grid | `grid_size` (cells), `cell_size` (px), `edge_left` / `edge_top` / `edge_right` / `edge_bottom`: `Wall` keeps water in, `Open` lets it leave and deletes it |
-| Simulation | `gravity` (px/s², default `(0, 980)`), `flip_ratio` (0 = viscous PIC, 1 = splashy FLIP), `max_speed` (0 = only the one-cell-per-step limit), `solver_iterations`, `substeps`, `max_particles`, `auto_update`, `use_threads` |
+| Simulation | `gravity` (px/s², default `(0, 980)`), `flip_ratio` (0 = viscous PIC, 1 = splashy FLIP), `drift_compensation` (pushes compressed water apart to preserve volume, in cells/s per unit of compression; lower it if enclosed water churns instead of settling, at the cost of some volume loss), `max_speed` (0 = only the one-cell-per-step limit), `solver_iterations`, `substeps`, `max_particles`, `auto_update`, `use_threads` |
 | Scrolling | `follow_target`: the domain re-centres on this node in whole-cell steps |
 | Collision | `collision_mask`: physics layers that act as walls |
 | Rendering | `render_mode` (`None`, `Particles`, `Surface`), `water_color`, `foam_color`, `foam_speed` (speed at which water turns fully foam-coloured), `particle_scale`, `surface_resolution` |
