@@ -25,7 +25,7 @@ Download `flip_water_simulation.zip` from the [latest release](https://github.co
 | Group | Properties |
 | --- | --- |
 | Grid | `grid_size` (cells), `cell_size` (px), `edge_left` / `edge_top` / `edge_right` / `edge_bottom`: `Wall` keeps water in, `Open` lets it leave and deletes it |
-| Simulation | `gravity` (px/s², default `(0, 980)`), `flip_ratio` (0 = viscous PIC, 1 = splashy FLIP), `drift_compensation` (pushes compressed water apart to preserve volume, in cells/s per unit of compression; lower it if enclosed water churns instead of settling, at the cost of some volume loss), `max_speed` (0 = only the one-cell-per-step limit), `solver_iterations`, `substeps`, `max_particles`, `auto_update`, `use_threads` |
+| Simulation | `gravity` (px/s², default `(0, 980)`), `flip_ratio` (0 = viscous PIC, 1 = splashy FLIP), `drift_compensation` (pushes compressed water apart to preserve volume, in cells/s per unit of compression; 0 lets water slowly compress), `max_speed` (0 = only the one-cell-per-step limit), `solver_iterations`, `substeps`, `max_particles`, `auto_update`, `use_threads` |
 | Scrolling | `follow_target`: the domain re-centres on this node in whole-cell steps |
 | Collision | `collision_mask`: physics layers that act as walls |
 | Rendering | `render_mode` (`None`, `Particles`, `Surface`), `water_color`, `foam_color`, `foam_speed` (speed at which water turns fully foam-coloured), `particle_scale`, `surface_resolution` |
@@ -38,6 +38,9 @@ Download `flip_water_simulation.zip` from the [latest release](https://github.co
 | `shift(cells)` | Move the domain by whole cells. The water stays put in world space, and water that ends up outside the domain is deleted. Emits `region_exposed(rect)` for each newly uncovered strip. |
 | `add_particle(pos, velocity)`, `apply_impulse(center, radius, velocity)`, `remove_particles_in_circle(center, radius)` | Add, push or remove water. |
 | `count_particles_in_rect(rect)`, `count_particles_in_circle(center, radius)` | Gameplay queries. |
+| `get_average_velocity_in_circle(center, radius)` | Average velocity of the water in a circle, e.g. for currents acting on bodies. |
+| `apply_radial_impulse(center, radius, strength)` | Push water away from `center` (negative pulls), falling off linearly to zero at `radius`. |
+| `update_multimesh(multimesh, scale, min_speed)` | Write one instance per particle (moving at least `min_speed`) into a `TRANSFORM_2D` `MultiMesh`, for custom rendering in a single draw call. |
 | `get_particle_positions()`, `get_particle_velocities()`, `get_cell_types()`, `get_pressure()` | Raw state as packed arrays, e.g. for custom rendering. |
 | `update(delta)` | Step manually (set `auto_update = false`). |
 | `refresh_colliders()` | Re-read static bodies (see below). |

@@ -171,6 +171,9 @@ void FLIPWaterSimulation::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("remove_particles_in_circle", "center", "radius"), &FLIPWaterSimulation::remove_particles_in_circle);
 	ClassDB::bind_method(D_METHOD("count_particles_in_circle", "center", "radius"), &FLIPWaterSimulation::count_particles_in_circle);
 	ClassDB::bind_method(D_METHOD("count_particles_in_rect", "rect"), &FLIPWaterSimulation::count_particles_in_rect);
+	ClassDB::bind_method(D_METHOD("get_average_velocity_in_circle", "center", "radius"), &FLIPWaterSimulation::get_average_velocity_in_circle);
+	ClassDB::bind_method(D_METHOD("apply_radial_impulse", "center", "radius", "strength"), &FLIPWaterSimulation::apply_radial_impulse);
+	ClassDB::bind_method(D_METHOD("update_multimesh", "multimesh", "scale", "min_speed"), &FLIPWaterSimulation::update_multimesh, DEFVAL(1.0), DEFVAL(0.0));
 
 	ADD_GROUP("Grid", "");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "grid_size", PROPERTY_HINT_NONE, "suffix:cells"), "set_grid_size", "get_grid_size");
@@ -348,6 +351,8 @@ void FLIPWaterSimulation::_rebuild_grid() {
 	prev_v.assign(f_num_cells, 0.0);
 	pressure.assign(f_num_cells, 0.0);
 	p_densities.assign(f_num_cells, 0.0);
+	drift_source.assign(f_num_cells, 0.0);
+	region_ids.assign(f_num_cells, -1);
 	s.assign(f_num_cells, 1.0);
 
 	p_inv_spacing = 1.0 / (2.2 * p_radius);
@@ -803,6 +808,75 @@ int FLIPWaterSimulation::count_particles_in_rect(const Rect2 &p_rect) const {
 		}
 	}
 	return count;
+}
+
+Vector2 FLIPWaterSimulation::get_average_velocity_in_circle(const Vector2 &p_center, double p_radius) const {
+	double r2 = p_radius * p_radius;
+	Vector2 sum;
+	int count = 0;
+	for (size_t i = 0; i < p_positions.size(); i++) {
+		if (p_positions[i].distance_squared_to(p_center) <= r2) {
+			sum += p_velocities[i];
+			count++;
+		}
+	}
+	return count > 0 ? sum / count : Vector2();
+}
+
+void FLIPWaterSimulation::apply_radial_impulse(const Vector2 &p_center, double p_radius, double p_strength) {
+	double r2 = p_radius * p_radius;
+	for (size_t i = 0; i < p_positions.size(); i++) {
+		Vector2 offset = p_positions[i] - p_center;
+		double d2 = offset.length_squared();
+		if (d2 <= r2 && d2 > 0.0) {
+			double d = std::sqrt(d2);
+			p_velocities[i] += offset / d * (p_strength * (1.0 - d / p_radius));
+		}
+	}
+}
+
+// Writes one 2D instance transform per particle (optionally only those moving at least `min_speed`),
+// so custom particle rendering takes a single draw call and no per-particle script work.
+void FLIPWaterSimulation::update_multimesh(const Ref<MultiMesh> &p_multimesh, double p_scale, double p_min_speed) const {
+	ERR_FAIL_COND(p_multimesh.is_null());
+	ERR_FAIL_COND_MSG(p_multimesh->get_transform_format() != MultiMesh::TRANSFORM_2D, "MultiMesh must use TRANSFORM_2D.");
+	ERR_FAIL_COND_MSG(p_multimesh->is_using_colors() || p_multimesh->is_using_custom_data(), "MultiMesh must not use colors or custom data.");
+
+	double min2 = p_min_speed * p_min_speed;
+	int count = 0;
+	for (size_t i = 0; i < p_positions.size(); i++) {
+		if (p_velocities[i].length_squared() >= min2) {
+			count++;
+		}
+	}
+
+	// Grow the instance buffer geometrically and hide the unused tail, so it isn't reallocated every frame.
+	int capacity = p_multimesh->get_instance_count();
+	if (count > capacity) {
+		capacity = std::max(count, capacity + capacity / 2 + 64);
+		p_multimesh->set_instance_count(capacity);
+	}
+
+	PackedFloat32Array buffer;
+	buffer.resize(static_cast<int64_t>(capacity) * 8);
+	float *w = buffer.ptrw();
+	std::fill(w, w + buffer.size(), 0.0f);
+	float scale = static_cast<float>(p_scale);
+	int n = 0;
+	for (size_t i = 0; i < p_positions.size(); i++) {
+		if (p_velocities[i].length_squared() < min2) {
+			continue;
+		}
+		// 2D layout: basis.x.x, basis.y.x, padding, origin.x, basis.x.y, basis.y.y, padding, origin.y.
+		float *t = w + static_cast<int64_t>(n) * 8;
+		t[0] = scale;
+		t[3] = p_positions[i].x;
+		t[5] = scale;
+		t[7] = p_positions[i].y;
+		n++;
+	}
+	p_multimesh->set_buffer(buffer);
+	p_multimesh->set_visible_instance_count(count);
 }
 
 // Physics colliders
@@ -1468,6 +1542,31 @@ void FLIPWaterSimulation::_particles_to_grid() {
 		}
 	}
 
+	// A cell that momentarily holds no particle but is enclosed by fluid is still part of the fluid.
+	// Treated as air it would be a zero-pressure hole inside the water, which sucks particles in and
+	// keeps the surrounding water churning.
+	for (int j = 1; j < f_num_y - 1; j++) {
+		for (int i = 1; i < f_num_x - 1; i++) {
+			int idx = i + (f_num_x * j);
+			if (cell_types[idx] != AIR_CELL) {
+				continue;
+			}
+			const int neighbours[4] = { idx - 1, idx + 1, idx - f_num_x, idx + f_num_x };
+			bool enclosed = true;
+			bool touches_fluid = false;
+			for (int n : neighbours) {
+				if (cell_types[n] == AIR_CELL) {
+					enclosed = false;
+					break;
+				}
+				touches_fluid = touches_fluid || cell_types[n] == FLUID_CELL;
+			}
+			if (enclosed && touches_fluid) {
+				cell_types[idx] = FLUID_CELL;
+			}
+		}
+	}
+
 	for (int component = 0; component < 2; component++) {
 		double dx = component == 0 ? 0.0 : h2;
 		double dy = component == 0 ? h2 : 0.0;
@@ -1618,11 +1717,80 @@ void FLIPWaterSimulation::_update_particle_density() {
 	}
 }
 
+// Drift compensation pushes over-compressed fluid apart. Water with a free surface can expand into
+// the air, but a sealed pocket (no air cell, no open edge, not touching the unsolved border) cannot
+// change volume, so a purely outward push has no solution there: the solver never converges and the
+// water churns forever. In sealed pockets the source is made zero-mean, which only redistributes
+// density within the pocket.
+void FLIPWaterSimulation::_compute_drift_source() {
+	std::fill(drift_source.begin(), drift_source.end(), 0.0);
+	if (p_rest_density <= 0.0 || drift_compensation <= 0.0) {
+		return;
+	}
+
+	double drift = drift_compensation * cell_size;
+	for (int i = 0; i < f_num_cells; i++) {
+		if (cell_types[i] == FLUID_CELL) {
+			double compression = p_densities[i] - p_rest_density;
+			if (compression > 0.0) {
+				drift_source[i] = drift * compression;
+			}
+		}
+	}
+
+	std::fill(region_ids.begin(), region_ids.end(), -1);
+	int region = 0;
+	for (int start = 0; start < f_num_cells; start++) {
+		if (cell_types[start] != FLUID_CELL || region_ids[start] != -1) {
+			continue;
+		}
+
+		bool open = false;
+		double total = 0.0;
+		region_cells.clear();
+		region_stack.clear();
+		region_stack.push_back(start);
+		region_ids[start] = region;
+		while (!region_stack.empty()) {
+			int idx = region_stack.back();
+			region_stack.pop_back();
+			region_cells.push_back(idx);
+			total += drift_source[idx];
+
+			int i = idx % f_num_x;
+			int j = idx / f_num_x;
+			// Border cells are never solved, so they act as a free (zero pressure) boundary.
+			if (i == 0 || j == 0 || i == f_num_x - 1 || j == f_num_y - 1) {
+				open = true;
+				continue;
+			}
+			const int neighbours[4] = { idx - 1, idx + 1, idx - f_num_x, idx + f_num_x };
+			for (int n : neighbours) {
+				if (cell_types[n] == AIR_CELL) {
+					open = true;
+				} else if (cell_types[n] == FLUID_CELL && region_ids[n] == -1) {
+					region_ids[n] = region;
+					region_stack.push_back(n);
+				}
+			}
+		}
+
+		if (!open && !region_cells.empty()) {
+			double mean = total / region_cells.size();
+			for (int idx : region_cells) {
+				drift_source[idx] -= mean;
+			}
+		}
+		region++;
+	}
+}
+
 void FLIPWaterSimulation::_solve_incompressibility(double dt) {
 	std::fill(pressure.begin(), pressure.end(), 0.0);
 	prev_u = u;
 	prev_v = v;
 	solve_cp = DENSITY * cell_size / dt;
+	_compute_drift_source();
 
 	// Red-black Gauss-Seidel: cells of one colour share no faces, so each half-sweep can run in parallel.
 	// Only worth threading on large grids, so each chunk must cover at least ~8k cells.
@@ -1636,8 +1804,6 @@ void FLIPWaterSimulation::_solve_incompressibility(double dt) {
 }
 
 void FLIPWaterSimulation::_solve_rows_range(int begin, int end) {
-	double drift = drift_compensation * cell_size;
-
 	for (int j = begin + 1; j < end + 1; j++) {
 		int i0 = ((1 + j) % 2 == solve_color) ? 1 : 2;
 		for (int i = i0; i < f_num_x - 1; i += 2) {
@@ -1660,13 +1826,7 @@ void FLIPWaterSimulation::_solve_rows_range(int begin, int end) {
 				continue;
 			}
 
-			double div = u[right] - u[center] + v[bottom] - v[center];
-			if (p_rest_density > 0.0) {
-				double compression = p_densities[center] - p_rest_density;
-				if (compression > 0.0) {
-					div -= drift * compression;
-				}
-			}
+			double div = u[right] - u[center] + v[bottom] - v[center] - drift_source[center];
 
 			double _p = -div / _s;
 			_p *= OVER_RELAXATION;

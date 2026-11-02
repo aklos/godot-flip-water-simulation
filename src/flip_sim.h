@@ -3,6 +3,7 @@
 
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/classes/physics_shape_query_parameters2d.hpp>
+#include <godot_cpp/classes/multi_mesh.hpp>
 #include <godot_cpp/classes/quad_mesh.hpp>
 #include <godot_cpp/classes/shader_material.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
@@ -98,6 +99,11 @@ private:
 	std::vector<double> pressure;
 	std::vector<double> s;
 	std::vector<double> p_densities;
+	// Per-cell drift compensation source for the current solve, and flood-fill scratch for finding sealed regions.
+	std::vector<double> drift_source;
+	std::vector<int> region_ids;
+	std::vector<int> region_stack;
+	std::vector<int> region_cells;
 
 	// Particle state.
 	std::vector<Vector2> p_positions;
@@ -170,6 +176,7 @@ private:
 	void _particles_to_grid();
 	void _grid_to_particles_range(int begin, int end);
 	void _update_particle_density();
+	void _compute_drift_source();
 	void _solve_incompressibility(double dt);
 	void _solve_rows_range(int begin, int end);
 
@@ -255,6 +262,9 @@ public:
 	int remove_particles_in_circle(const Vector2 &p_center, double p_radius);
 	int count_particles_in_circle(const Vector2 &p_center, double p_radius) const;
 	int count_particles_in_rect(const Rect2 &p_rect) const;
+	Vector2 get_average_velocity_in_circle(const Vector2 &p_center, double p_radius) const;
+	void apply_radial_impulse(const Vector2 &p_center, double p_radius, double p_strength);
+	void update_multimesh(const Ref<MultiMesh> &p_multimesh, double p_scale = 1.0, double p_min_speed = 0.0) const;
 };
 
 } // namespace godot
