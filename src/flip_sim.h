@@ -67,6 +67,20 @@ private:
 	double drift_compensation;
 	double max_speed;
 	int solver_iterations;
+	int particles_per_side;
+	int separation_iterations;
+	bool drift_pull;
+	double cohesion;
+	// Whether thin water lying on a floor is run off toward a drop too, or only thin water lying on water.
+	bool thin_runoff_ground;
+	double viscosity;
+	double spray_density;
+	double churn_low;
+	double churn_high;
+	double churn_fade;
+	double wall_drag;
+	int void_fill_cells;
+	double step_dt;
 	int substeps;
 	int max_particles;
 	EdgeMode edge_modes[4];
@@ -101,6 +115,17 @@ private:
 	std::vector<double> p_densities;
 	// Per-cell drift compensation source for the current solve, and flood-fill scratch for finding sealed regions.
 	std::vector<double> drift_source;
+	// Water let in or out of the grid this frame (add_volume_source), cleared after each step.
+	struct VolumeSource {
+		Vector2 center;
+		double radius;
+		double rate;
+	};
+	std::vector<VolumeSource> volume_sources;
+	std::vector<int> source_cells;
+	// Per cell, which way thin water in it is to run this step, and how many particles it holds (see _level_thin_water).
+	std::vector<float> thin_push;
+	std::vector<int> thin_count;
 	std::vector<int> region_ids;
 	std::vector<int> region_stack;
 	std::vector<int> region_cells;
@@ -109,10 +134,55 @@ private:
 	std::vector<Vector2> p_positions;
 	std::vector<Vector2> p_velocities;
 	std::vector<Vector2> p_push;
+	std::vector<Vector2> p_cohere;
+	std::vector<Vector2> p_smooth;
+	std::vector<float> p_churn;
+	std::vector<float> p_churn_next;
 	std::vector<int> num_cell_particles;
 	std::vector<int> first_cell_particle;
 	std::vector<int> cell_particle_ids;
+	// Particles by water cell, for the circle and rect queries: a query looks only at the cells it covers. Built on
+	// the first query after particles move, add or go.
+	mutable std::vector<int> q_first;
+	mutable std::vector<int> q_ids;
+	mutable bool q_valid = false;
+	void _ensure_query_index() const;
+	template <typename F>
+	void _each_in_rect(const Rect2 &p_rect, F &&p_fn) const;
+	template <typename F>
+	void _each_in_circle(const Vector2 &p_center, double p_radius, F &&p_fn) const;
 	std::minstd_rand rng;
+	std::vector<float> surf_w, surf_x, surf_y, surf_c, surf_s, surf_phi, surf_tmp;
+	std::vector<uint8_t> surf_solid, surf_seen;
+	std::vector<int32_t> surf_stack, surf_patch;
+	std::vector<float> surf_depth, surf_depth_prev;
+	int surf_nx = 0;
+	int surf_ny = 0;
+	float surf_sp = 4.0f;
+	float surf_kernel = 16.0f;
+	float surf_reach = 0.0f;
+	Vector2 surf_origin;
+	float surf_band = 24.0f;
+	float surf_radius = 6.0f;
+	// The particles a surface build reads: position, churn, and the solid faces they mirror across (NaN if none).
+	struct SurfParticle {
+		float x, y, churn, speed, face_x, face_y;
+	};
+	std::vector<SurfParticle> surf_parts;
+	void _surface_rows(int begin, int end);
+	void _surface_phi_rows(int begin, int end);
+	void _surface_smooth_x_rows(int begin, int end);
+	void _surface_smooth_y_rows(int begin, int end);
+	void _surface_level_rows(int begin, int end);
+	int surf_level = 0;
+	float surf_level_tol = 12.0f;
+	// Last build's field, for settling this one toward it.
+	std::vector<float> surf_prev;
+	std::vector<float> surf_flat;
+	Vector2 surf_prev_origin;
+	int surf_prev_nx = 0;
+	int surf_prev_ny = 0;
+	float surf_prev_sp = 0.0f;
 
 	// Physics colliders.
 	RID query_shape;
@@ -169,15 +239,21 @@ private:
 	void _update_sensors();
 
 	void _step(double dt);
+	void _level_thin_water(double dt);
 	void _integrate_particles(double dt);
 	void _push_particles_apart();
 	void _push_particles_range(int begin, int end);
+	void _churn_range(int begin, int end);
 	void _handle_collisions();
 	void _particles_to_grid();
 	void _grid_to_particles_range(int begin, int end);
 	void _update_particle_density();
+	double _full_density(int idx) const;
 	void _compute_drift_source();
+	void _apply_volume_sources();
 	void _solve_incompressibility(double dt);
+	void _apply_wall_drag(double dt);
+	void _fill_voids();
 	void _solve_rows_range(int begin, int end);
 
 	void _run_parallel(int count, int min_per_chunk, void (FLIPWaterSimulation::*fn)(int, int));
@@ -209,6 +285,30 @@ public:
 	double get_max_speed() const;
 	void set_solver_iterations(int p_iterations);
 	int get_solver_iterations() const;
+	void set_particles_per_side(int p_count);
+	int get_particles_per_side() const;
+	void set_separation_iterations(int p_iterations);
+	int get_separation_iterations() const;
+	void set_drift_pull(bool p_enabled);
+	bool is_drift_pull() const;
+	void set_cohesion(double p_amount);
+	void set_thin_runoff_ground(bool p_enabled);
+	bool get_thin_runoff_ground() const;
+	double get_cohesion() const;
+	void set_viscosity(double p_amount);
+	double get_viscosity() const;
+	void set_spray_density(double p_fraction);
+	double get_spray_density() const;
+	void set_churn_low(double p_speed);
+	double get_churn_low() const;
+	void set_churn_high(double p_speed);
+	double get_churn_high() const;
+	void set_churn_fade(double p_rate);
+	double get_churn_fade() const;
+	void set_wall_drag(double p_rate);
+	double get_wall_drag() const;
+	void set_void_fill_cells(int p_cells);
+	int get_void_fill_cells() const;
 	void set_substeps(int p_substeps);
 	int get_substeps() const;
 	void set_max_particles(int p_max);
@@ -264,7 +364,11 @@ public:
 	int count_particles_in_rect(const Rect2 &p_rect) const;
 	Vector2 get_average_velocity_in_circle(const Vector2 &p_center, double p_radius) const;
 	void apply_radial_impulse(const Vector2 &p_center, double p_radius, double p_strength);
-	void update_multimesh(const Ref<MultiMesh> &p_multimesh, double p_scale = 1.0, double p_min_speed = 0.0) const;
+	void add_volume_source(const Vector2 &p_center, double p_radius, double p_rate);
+	PackedByteArray build_surface(const Vector2 &p_origin, const Vector2i &p_samples, double p_spacing, double p_kernel, double p_radius, double p_band, double p_ghost_reach, int p_smooth, double p_level, double p_level_tol, double p_settle, double p_depth = 96.0, double p_pocket = 900.0);
+	PackedVector2Array sample_churned(const Rect2 &p_rect, int p_probes, double p_min_churn);
+	Vector2 sample_velocity(const Vector2 &p_pos) const;
+	void update_multimesh(const Ref<MultiMesh> &p_multimesh, double p_scale = 1.0, double p_min_speed = 0.0, double p_stretch = 0.0, double p_max_stretch = 1.0, int p_every = 1, double p_min_churn = -1.0, double p_mirror = 0.0, double p_ground = 0.0) const;
 };
 
 } // namespace godot

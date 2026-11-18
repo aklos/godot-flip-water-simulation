@@ -119,6 +119,30 @@ void FLIPWaterSimulation::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_max_speed"), &FLIPWaterSimulation::get_max_speed);
 	ClassDB::bind_method(D_METHOD("set_solver_iterations", "iterations"), &FLIPWaterSimulation::set_solver_iterations);
 	ClassDB::bind_method(D_METHOD("get_solver_iterations"), &FLIPWaterSimulation::get_solver_iterations);
+	ClassDB::bind_method(D_METHOD("set_particles_per_side", "count"), &FLIPWaterSimulation::set_particles_per_side);
+	ClassDB::bind_method(D_METHOD("get_particles_per_side"), &FLIPWaterSimulation::get_particles_per_side);
+	ClassDB::bind_method(D_METHOD("set_cohesion", "amount"), &FLIPWaterSimulation::set_cohesion);
+	ClassDB::bind_method(D_METHOD("set_thin_runoff_ground", "enabled"), &FLIPWaterSimulation::set_thin_runoff_ground);
+	ClassDB::bind_method(D_METHOD("get_thin_runoff_ground"), &FLIPWaterSimulation::get_thin_runoff_ground);
+	ClassDB::bind_method(D_METHOD("get_cohesion"), &FLIPWaterSimulation::get_cohesion);
+	ClassDB::bind_method(D_METHOD("set_viscosity", "amount"), &FLIPWaterSimulation::set_viscosity);
+	ClassDB::bind_method(D_METHOD("get_viscosity"), &FLIPWaterSimulation::get_viscosity);
+	ClassDB::bind_method(D_METHOD("set_separation_iterations", "iterations"), &FLIPWaterSimulation::set_separation_iterations);
+	ClassDB::bind_method(D_METHOD("get_separation_iterations"), &FLIPWaterSimulation::get_separation_iterations);
+	ClassDB::bind_method(D_METHOD("set_drift_pull", "enabled"), &FLIPWaterSimulation::set_drift_pull);
+	ClassDB::bind_method(D_METHOD("is_drift_pull"), &FLIPWaterSimulation::is_drift_pull);
+	ClassDB::bind_method(D_METHOD("set_spray_density", "fraction"), &FLIPWaterSimulation::set_spray_density);
+	ClassDB::bind_method(D_METHOD("get_spray_density"), &FLIPWaterSimulation::get_spray_density);
+	ClassDB::bind_method(D_METHOD("set_churn_low", "speed"), &FLIPWaterSimulation::set_churn_low);
+	ClassDB::bind_method(D_METHOD("get_churn_low"), &FLIPWaterSimulation::get_churn_low);
+	ClassDB::bind_method(D_METHOD("set_churn_high", "speed"), &FLIPWaterSimulation::set_churn_high);
+	ClassDB::bind_method(D_METHOD("get_churn_high"), &FLIPWaterSimulation::get_churn_high);
+	ClassDB::bind_method(D_METHOD("set_churn_fade", "rate"), &FLIPWaterSimulation::set_churn_fade);
+	ClassDB::bind_method(D_METHOD("get_churn_fade"), &FLIPWaterSimulation::get_churn_fade);
+	ClassDB::bind_method(D_METHOD("set_wall_drag", "rate"), &FLIPWaterSimulation::set_wall_drag);
+	ClassDB::bind_method(D_METHOD("get_wall_drag"), &FLIPWaterSimulation::get_wall_drag);
+	ClassDB::bind_method(D_METHOD("set_void_fill_cells", "cells"), &FLIPWaterSimulation::set_void_fill_cells);
+	ClassDB::bind_method(D_METHOD("get_void_fill_cells"), &FLIPWaterSimulation::get_void_fill_cells);
 	ClassDB::bind_method(D_METHOD("set_substeps", "substeps"), &FLIPWaterSimulation::set_substeps);
 	ClassDB::bind_method(D_METHOD("get_substeps"), &FLIPWaterSimulation::get_substeps);
 	ClassDB::bind_method(D_METHOD("set_max_particles", "max_particles"), &FLIPWaterSimulation::set_max_particles);
@@ -173,7 +197,11 @@ void FLIPWaterSimulation::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("count_particles_in_rect", "rect"), &FLIPWaterSimulation::count_particles_in_rect);
 	ClassDB::bind_method(D_METHOD("get_average_velocity_in_circle", "center", "radius"), &FLIPWaterSimulation::get_average_velocity_in_circle);
 	ClassDB::bind_method(D_METHOD("apply_radial_impulse", "center", "radius", "strength"), &FLIPWaterSimulation::apply_radial_impulse);
-	ClassDB::bind_method(D_METHOD("update_multimesh", "multimesh", "scale", "min_speed"), &FLIPWaterSimulation::update_multimesh, DEFVAL(1.0), DEFVAL(0.0));
+	ClassDB::bind_method(D_METHOD("add_volume_source", "center", "radius", "rate"), &FLIPWaterSimulation::add_volume_source);
+	ClassDB::bind_method(D_METHOD("build_surface", "origin", "samples", "spacing", "kernel", "radius", "band", "ghost_reach", "smooth", "level", "level_tol", "settle", "depth", "pocket"), &FLIPWaterSimulation::build_surface, DEFVAL(96.0), DEFVAL(900.0));
+	ClassDB::bind_method(D_METHOD("sample_churned", "rect", "probes", "min_churn"), &FLIPWaterSimulation::sample_churned);
+	ClassDB::bind_method(D_METHOD("sample_velocity", "position"), &FLIPWaterSimulation::sample_velocity);
+	ClassDB::bind_method(D_METHOD("update_multimesh", "multimesh", "scale", "min_speed", "stretch", "max_stretch", "every", "min_churn", "mirror", "ground"), &FLIPWaterSimulation::update_multimesh, DEFVAL(1.0), DEFVAL(0.0), DEFVAL(0.0), DEFVAL(1.0), DEFVAL(1), DEFVAL(-1.0), DEFVAL(0.0), DEFVAL(0.0));
 
 	ADD_GROUP("Grid", "");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "grid_size", PROPERTY_HINT_NONE, "suffix:cells"), "set_grid_size", "get_grid_size");
@@ -189,6 +217,20 @@ void FLIPWaterSimulation::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "drift_compensation", PROPERTY_HINT_RANGE, "0,10,0.01,or_greater"), "set_drift_compensation", "get_drift_compensation");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_speed", PROPERTY_HINT_RANGE, "0,5000,1,or_greater,suffix:px/s"), "set_max_speed", "get_max_speed");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "solver_iterations", PROPERTY_HINT_RANGE, "1,200,1"), "set_solver_iterations", "get_solver_iterations");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "particles_per_side", PROPERTY_HINT_RANGE, "1,4,1"), "set_particles_per_side", "get_particles_per_side");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "separation_iterations", PROPERTY_HINT_RANGE, "0,16,1"), "set_separation_iterations", "get_separation_iterations");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "cohesion", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_cohesion", "get_cohesion");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "thin_runoff_ground"), "set_thin_runoff_ground", "get_thin_runoff_ground");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "viscosity", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_viscosity", "get_viscosity");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "drift_pull"), "set_drift_pull", "is_drift_pull");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "wall_drag", PROPERTY_HINT_RANGE, "0,60,0.1,suffix:/s"), "set_wall_drag", "get_wall_drag");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "void_fill_cells", PROPERTY_HINT_RANGE, "0,1024,1"), "set_void_fill_cells", "get_void_fill_cells");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "spray_density", PROPERTY_HINT_RANGE, "0,0.9,0.01"), "set_spray_density", "get_spray_density");
+	ADD_GROUP("Churn", "churn_");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "churn_low", PROPERTY_HINT_RANGE, "0,2000,1,suffix:px/s"), "set_churn_low", "get_churn_low");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "churn_high", PROPERTY_HINT_RANGE, "1,4000,1,suffix:px/s"), "set_churn_high", "get_churn_high");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "churn_fade", PROPERTY_HINT_RANGE, "0,20,0.01,suffix:/s"), "set_churn_fade", "get_churn_fade");
+	ADD_GROUP("", "");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "substeps", PROPERTY_HINT_RANGE, "1,16,1"), "set_substeps", "get_substeps");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_particles", PROPERTY_HINT_RANGE, "0,200000,1,or_greater"), "set_max_particles", "get_max_particles");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "auto_update"), "set_auto_update", "is_auto_update");
@@ -231,6 +273,19 @@ FLIPWaterSimulation::FLIPWaterSimulation() {
 	drift_compensation = 5.0;
 	max_speed = 0.0;
 	solver_iterations = 30;
+	particles_per_side = 2;
+	separation_iterations = 2;
+	drift_pull = true;
+	cohesion = 0.0;
+	thin_runoff_ground = true;
+	viscosity = 0.0;
+	spray_density = 0.0;
+	churn_low = 120.0;
+	churn_high = 400.0;
+	churn_fade = 1.5;
+	wall_drag = 0.0;
+	void_fill_cells = 0;
+	step_dt = 1.0 / 60.0;
 	substeps = 1;
 	max_particles = 20000;
 	for (int i = 0; i < 4; i++) {
@@ -335,8 +390,15 @@ void FLIPWaterSimulation::_rebuild_grid() {
 	f_num_y = grid_size.y;
 	f_num_cells = f_num_x * f_num_y;
 	f_inv_spacing = 1.0 / cell_size;
-	p_radius = 0.3 * cell_size;
-	p_rest_density = 0.0;
+	// Water is spawned as an n x n lattice per cell, and particles keep apart by exactly that spacing,
+	// so freshly filled water is already at rest density. A radius that disagreed with the spawn
+	// spacing let gravity squeeze water by about a fifth, and drift compensation (which only ever
+	// pushes apart) then inflated it into a sponge.
+	p_radius = 0.5 * cell_size / particles_per_side;
+	// Each particle spreads a total weight of 1 over the cell centres around it, so evenly spread
+	// water reads n * n everywhere. Measuring it from the first frame's water instead counted the
+	// half-empty surface cells and read low.
+	p_rest_density = particles_per_side * particles_per_side;
 
 	cell_types.assign(f_num_cells, AIR_CELL);
 	user_solid.assign(f_num_cells, 0);
@@ -352,6 +414,7 @@ void FLIPWaterSimulation::_rebuild_grid() {
 	pressure.assign(f_num_cells, 0.0);
 	p_densities.assign(f_num_cells, 0.0);
 	drift_source.assign(f_num_cells, 0.0);
+	thin_push.assign(f_num_cells, 0.0f);
 	region_ids.assign(f_num_cells, -1);
 	s.assign(f_num_cells, 1.0);
 
@@ -362,8 +425,10 @@ void FLIPWaterSimulation::_rebuild_grid() {
 	num_cell_particles.assign(p_num_cells, 0);
 	first_cell_particle.assign(p_num_cells + 1, 0);
 
+	q_valid = false;
 	p_positions.clear();
 	p_velocities.clear();
+	p_churn.clear();
 	dynamic_cells.clear();
 	static_colliders_dirty = true;
 	_update_solids();
@@ -458,6 +523,110 @@ void FLIPWaterSimulation::set_solver_iterations(int p_iterations) {
 
 int FLIPWaterSimulation::get_solver_iterations() const {
 	return solver_iterations;
+}
+
+void FLIPWaterSimulation::set_particles_per_side(int p_count) {
+	particles_per_side = std::clamp(p_count, 1, 4);
+	_rebuild_grid();
+}
+
+int FLIPWaterSimulation::get_particles_per_side() const {
+	return particles_per_side;
+}
+
+void FLIPWaterSimulation::set_separation_iterations(int p_iterations) {
+	separation_iterations = std::clamp(p_iterations, 0, 16);
+}
+
+int FLIPWaterSimulation::get_separation_iterations() const {
+	return separation_iterations;
+}
+
+void FLIPWaterSimulation::set_drift_pull(bool p_enabled) {
+	drift_pull = p_enabled;
+}
+
+bool FLIPWaterSimulation::is_drift_pull() const {
+	return drift_pull;
+}
+
+// Cohesion pulls particles that have drifted apart (between one and two rest spacings) back toward each other,
+// a share of the gap per step. Inside a body of water the pulls cancel; at its edge they hold it together, so a
+// stream falls as a rope and breaks into blobs instead of fraying into single drops. Viscosity evens each
+// particle's velocity toward its neighbours', so water moves as a body. Both 0 leave the sim as it was.
+void FLIPWaterSimulation::set_cohesion(double p_amount) {
+	cohesion = std::clamp(p_amount, 0.0, 1.0);
+}
+
+void FLIPWaterSimulation::set_thin_runoff_ground(bool p_enabled) {
+	thin_runoff_ground = p_enabled;
+}
+
+bool FLIPWaterSimulation::get_thin_runoff_ground() const {
+	return thin_runoff_ground;
+}
+
+double FLIPWaterSimulation::get_cohesion() const {
+	return cohesion;
+}
+
+void FLIPWaterSimulation::set_viscosity(double p_amount) {
+	viscosity = std::clamp(p_amount, 0.0, 1.0);
+}
+
+double FLIPWaterSimulation::get_viscosity() const {
+	return viscosity;
+}
+
+// Cells holding less than this fraction of full water's density count as air: their particles fly free under
+// gravity (spray, thin sheets, falling streams) instead of being solved as a cell full of water, which made
+// sparse water swell into thick blobs. Zero solves every cell that holds a particle.
+void FLIPWaterSimulation::set_spray_density(double p_fraction) {
+	spray_density = std::clamp(p_fraction, 0.0, 0.9);
+}
+
+double FLIPWaterSimulation::get_spray_density() const {
+	return spray_density;
+}
+
+void FLIPWaterSimulation::set_churn_low(double p_speed) {
+	churn_low = std::max(p_speed, 0.0);
+}
+
+double FLIPWaterSimulation::get_churn_low() const {
+	return churn_low;
+}
+
+void FLIPWaterSimulation::set_churn_high(double p_speed) {
+	churn_high = std::max(p_speed, 1.0);
+}
+
+double FLIPWaterSimulation::get_churn_high() const {
+	return churn_high;
+}
+
+void FLIPWaterSimulation::set_churn_fade(double p_rate) {
+	churn_fade = std::max(p_rate, 0.0);
+}
+
+double FLIPWaterSimulation::get_churn_fade() const {
+	return churn_fade;
+}
+
+void FLIPWaterSimulation::set_wall_drag(double p_rate) {
+	wall_drag = std::max(p_rate, 0.0);
+}
+
+double FLIPWaterSimulation::get_wall_drag() const {
+	return wall_drag;
+}
+
+void FLIPWaterSimulation::set_void_fill_cells(int p_cells) {
+	void_fill_cells = std::max(p_cells, 0);
+}
+
+int FLIPWaterSimulation::get_void_fill_cells() const {
+	return void_fill_cells;
 }
 
 void FLIPWaterSimulation::set_substeps(int p_substeps) {
@@ -598,9 +767,11 @@ Vector2 FLIPWaterSimulation::cell_to_local(const Vector2i &p_cell) const {
 }
 
 void FLIPWaterSimulation::_spawn_cell_particles(double x, double y) {
-	for (int n = 0; n < 2; n++) {
-		double offset = (cell_size / 3) + (n * (cell_size / 2));
-		_add_particle_internal(Vector2(x + offset, y + offset), Vector2());
+	double step = cell_size / particles_per_side;
+	for (int a = 0; a < particles_per_side; a++) {
+		for (int b = 0; b < particles_per_side; b++) {
+			_add_particle_internal(Vector2(x + (a + 0.5) * step, y + (b + 0.5) * step), Vector2());
+		}
 	}
 }
 
@@ -634,8 +805,10 @@ void FLIPWaterSimulation::fill_cells(const Rect2i &p_rect, CellType p_type) {
 }
 
 void FLIPWaterSimulation::clear() {
+	q_valid = false;
 	p_positions.clear();
 	p_velocities.clear();
+	p_churn.clear();
 	std::fill(user_solid.begin(), user_solid.end(), 0);
 	std::fill(u.begin(), u.end(), 0.0);
 	std::fill(v.begin(), v.end(), 0.0);
@@ -670,10 +843,14 @@ void FLIPWaterSimulation::shift(const Vector2i &p_cells) {
 	static_colliders_dirty = true;
 
 	Vector2 offset = Vector2(p_cells) * cell_size;
+	q_valid = false;
 	for (size_t i = 0; i < p_positions.size(); i++) {
 		p_positions[i] -= offset;
 	}
 	_remove_particles_outside_domain();
+	// The last surface build is kept in local space: move it with the water, or the next build settles toward
+	// a field that is off by the shift.
+	surf_prev_origin -= offset;
 	set_position(get_position() + get_transform().basis_xform(offset));
 	_update_solids();
 
@@ -704,27 +881,90 @@ void FLIPWaterSimulation::_follow() {
 
 // Particles
 
+void FLIPWaterSimulation::_ensure_query_index() const {
+	if (q_valid) {
+		return;
+	}
+	int n = static_cast<int>(p_positions.size());
+	auto cell_of = [this](const Vector2 &p) {
+		int i = std::clamp(static_cast<int>(std::floor(p.x * f_inv_spacing)), 0, f_num_x - 1);
+		int j = std::clamp(static_cast<int>(std::floor(p.y * f_inv_spacing)), 0, f_num_y - 1);
+		return i + (f_num_x * j);
+	};
+	q_first.assign(f_num_cells + 1, 0);
+	q_ids.resize(n);
+	for (int k = 0; k < n; k++) {
+		q_first[cell_of(p_positions[k])]++;
+	}
+	int sum = 0;
+	for (int c = 0; c < f_num_cells; c++) {
+		sum += q_first[c];
+		q_first[c] = sum;
+	}
+	q_first[f_num_cells] = sum;
+	for (int k = 0; k < n; k++) {
+		q_ids[--q_first[cell_of(p_positions[k])]] = k;
+	}
+	q_valid = true;
+}
+
+template <typename F>
+void FLIPWaterSimulation::_each_in_rect(const Rect2 &p_rect, F &&p_fn) const {
+	if (f_num_cells <= 0) {
+		return;
+	}
+	_ensure_query_index();
+	Rect2 r = p_rect.abs();
+	int i0 = std::clamp(static_cast<int>(std::floor(r.position.x * f_inv_spacing)), 0, f_num_x - 1);
+	int j0 = std::clamp(static_cast<int>(std::floor(r.position.y * f_inv_spacing)), 0, f_num_y - 1);
+	int i1 = std::clamp(static_cast<int>(std::floor(r.get_end().x * f_inv_spacing)), 0, f_num_x - 1);
+	int j1 = std::clamp(static_cast<int>(std::floor(r.get_end().y * f_inv_spacing)), 0, f_num_y - 1);
+	for (int j = j0; j <= j1; j++) {
+		for (int i = i0; i <= i1; i++) {
+			int c = i + (f_num_x * j);
+			for (int k = q_first[c]; k < q_first[c + 1]; k++) {
+				p_fn(q_ids[k]);
+			}
+		}
+	}
+}
+
+template <typename F>
+void FLIPWaterSimulation::_each_in_circle(const Vector2 &p_center, double p_radius, F &&p_fn) const {
+	double r2 = p_radius * p_radius;
+	_each_in_rect(Rect2(p_center - Vector2(p_radius, p_radius), Vector2(p_radius, p_radius) * 2.0), [&](int id) {
+		if (p_positions[id].distance_squared_to(p_center) <= r2) {
+			p_fn(id);
+		}
+	});
+}
+
 bool FLIPWaterSimulation::_add_particle_internal(const Vector2 &pos, const Vector2 &vel) {
 	if (static_cast<int>(p_positions.size()) >= max_particles) {
 		return false;
 	}
+	q_valid = false;
 	p_positions.push_back(pos);
 	p_velocities.push_back(vel);
+	p_churn.push_back(0.0f);
 	return true;
 }
 
 void FLIPWaterSimulation::_remove_particles_outside_domain() {
+	q_valid = false;
 	Rect2 domain = get_domain_rect();
 	size_t kept = 0;
 	for (size_t i = 0; i < p_positions.size(); i++) {
 		if (domain.has_point(p_positions[i])) {
 			p_positions[kept] = p_positions[i];
 			p_velocities[kept] = p_velocities[i];
+			p_churn[kept] = p_churn[i];
 			kept++;
 		}
 	}
 	p_positions.resize(kept);
 	p_velocities.resize(kept);
+	p_churn.resize(kept);
 }
 
 int FLIPWaterSimulation::get_particle_count() const {
@@ -764,93 +1004,852 @@ bool FLIPWaterSimulation::add_particle(const Vector2 &p_pos, const Vector2 &p_ve
 }
 
 void FLIPWaterSimulation::apply_impulse(const Vector2 &p_center, double p_radius, const Vector2 &p_velocity) {
-	double r2 = p_radius * p_radius;
-	for (size_t i = 0; i < p_positions.size(); i++) {
-		if (p_positions[i].distance_squared_to(p_center) <= r2) {
-			p_velocities[i] += p_velocity;
-		}
-	}
+	_each_in_circle(p_center, p_radius, [&](int i) { p_velocities[i] += p_velocity; });
 }
 
 int FLIPWaterSimulation::remove_particles_in_circle(const Vector2 &p_center, double p_radius) {
+	// Found through the index; only an actual removal pays for compacting the arrays.
+	int found = 0;
+	_each_in_circle(p_center, p_radius, [&](int) { found++; });
+	if (found == 0) {
+		return 0;
+	}
+	q_valid = false;
 	double r2 = p_radius * p_radius;
 	size_t kept = 0;
 	for (size_t i = 0; i < p_positions.size(); i++) {
 		if (p_positions[i].distance_squared_to(p_center) > r2) {
 			p_positions[kept] = p_positions[i];
 			p_velocities[kept] = p_velocities[i];
+			p_churn[kept] = p_churn[i];
 			kept++;
 		}
 	}
 	int removed = static_cast<int>(p_positions.size() - kept);
 	p_positions.resize(kept);
 	p_velocities.resize(kept);
+	p_churn.resize(kept);
 	return removed;
 }
 
 int FLIPWaterSimulation::count_particles_in_circle(const Vector2 &p_center, double p_radius) const {
-	double r2 = p_radius * p_radius;
 	int count = 0;
-	for (size_t i = 0; i < p_positions.size(); i++) {
-		if (p_positions[i].distance_squared_to(p_center) <= r2) {
-			count++;
-		}
-	}
+	_each_in_circle(p_center, p_radius, [&](int) { count++; });
 	return count;
 }
 
 int FLIPWaterSimulation::count_particles_in_rect(const Rect2 &p_rect) const {
 	Rect2 rect = p_rect.abs();
 	int count = 0;
-	for (size_t i = 0; i < p_positions.size(); i++) {
+	_each_in_rect(rect, [&](int i) {
 		if (rect.has_point(p_positions[i])) {
 			count++;
 		}
-	}
+	});
 	return count;
 }
 
 Vector2 FLIPWaterSimulation::get_average_velocity_in_circle(const Vector2 &p_center, double p_radius) const {
-	double r2 = p_radius * p_radius;
 	Vector2 sum;
 	int count = 0;
-	for (size_t i = 0; i < p_positions.size(); i++) {
-		if (p_positions[i].distance_squared_to(p_center) <= r2) {
-			sum += p_velocities[i];
-			count++;
-		}
-	}
+	_each_in_circle(p_center, p_radius, [&](int i) {
+		sum += p_velocities[i];
+		count++;
+	});
 	return count > 0 ? sum / count : Vector2();
 }
 
 void FLIPWaterSimulation::apply_radial_impulse(const Vector2 &p_center, double p_radius, double p_strength) {
-	double r2 = p_radius * p_radius;
-	for (size_t i = 0; i < p_positions.size(); i++) {
+	_each_in_circle(p_center, p_radius, [&](int i) {
 		Vector2 offset = p_positions[i] - p_center;
 		double d2 = offset.length_squared();
-		if (d2 <= r2 && d2 > 0.0) {
+		if (d2 > 0.0) {
 			double d = std::sqrt(d2);
 			p_velocities[i] += offset / d * (p_strength * (1.0 - d / p_radius));
+		}
+	});
+}
+
+// Water that enters or leaves the grid inside a circle this frame, `rate` px^2 of it per second (negative drains):
+// the pressure solve is told the fluid cells there gain or lose that much volume, so the water round them flows in
+// to fill what is drained, or out to make room for what is added, in the same step. Taking particles out (or adding
+// them) without it left a hole the solver did not know to fill, or a crowd it threw apart. The caller still removes
+// or adds the particles themselves, at the same rate. Lasts until the end of the next step().
+void FLIPWaterSimulation::add_volume_source(const Vector2 &p_center, double p_radius, double p_rate) {
+	if (p_rate == 0.0 || p_radius <= 0.0) {
+		return;
+	}
+	volume_sources.push_back({ p_center, p_radius, p_rate });
+}
+
+void FLIPWaterSimulation::_apply_volume_sources() {
+	for (const VolumeSource &src : volume_sources) {
+		int i0 = std::clamp(static_cast<int>(std::floor((src.center.x - src.radius) * f_inv_spacing)), 1, f_num_x - 2);
+		int i1 = std::clamp(static_cast<int>(std::floor((src.center.x + src.radius) * f_inv_spacing)), 1, f_num_x - 2);
+		int j0 = std::clamp(static_cast<int>(std::floor((src.center.y - src.radius) * f_inv_spacing)), 1, f_num_y - 2);
+		int j1 = std::clamp(static_cast<int>(std::floor((src.center.y + src.radius) * f_inv_spacing)), 1, f_num_y - 2);
+		double r2 = src.radius * src.radius;
+		source_cells.clear();
+		for (int j = j0; j <= j1; j++) {
+			for (int i = i0; i <= i1; i++) {
+				int idx = i + (j * f_num_x);
+				if (cell_types[idx] != FLUID_CELL) {
+					continue;
+				}
+				Vector2 c((i + 0.5) * cell_size, (j + 0.5) * cell_size);
+				if (c.distance_squared_to(src.center) <= r2) {
+					source_cells.push_back(idx);
+				}
+			}
+		}
+		if (source_cells.empty()) {
+			// A circle smaller than a cell: the fluid cell it sits in, if any.
+			int i = std::clamp(static_cast<int>(std::floor(src.center.x * f_inv_spacing)), 1, f_num_x - 2);
+			int j = std::clamp(static_cast<int>(std::floor(src.center.y * f_inv_spacing)), 1, f_num_y - 2);
+			int idx = i + (j * f_num_x);
+			if (cell_types[idx] == FLUID_CELL) {
+				source_cells.push_back(idx);
+			}
+		}
+		if (source_cells.empty()) {
+			continue;
+		}
+		// The solve's divergence is a cell's net outflow in px/s across its faces, so a volume rate per cell divides
+		// by the cell's size once.
+		double per_cell = src.rate / (static_cast<double>(source_cells.size()) * cell_size);
+		for (int idx : source_cells) {
+			drift_source[idx] += per_cell;
 		}
 	}
 }
 
 // Writes one 2D instance transform per particle (optionally only those moving at least `min_speed`),
 // so custom particle rendering takes a single draw call and no per-particle script work.
-void FLIPWaterSimulation::update_multimesh(const Ref<MultiMesh> &p_multimesh, double p_scale, double p_min_speed) const {
-	ERR_FAIL_COND(p_multimesh.is_null());
-	ERR_FAIL_COND_MSG(p_multimesh->get_transform_format() != MultiMesh::TRANSFORM_2D, "MultiMesh must use TRANSFORM_2D.");
-	ERR_FAIL_COND_MSG(p_multimesh->is_using_colors() || p_multimesh->is_using_custom_data(), "MultiMesh must not use colors or custom data.");
+// `every` > 1 keeps only every n-th qualifying particle, for sparse markers such as bubbles. `min_churn`
+// keeps only particles at least that churned. A multimesh that uses colours gets each particle's churn in
+// its colour (r, g and b), for drawing white water.
+// Surface reconstruction (Zhu & Bridson 2005): each sample's distance to the kernel-weighted average of the particles
+// near it, less a radius. Flat-packed particles give a flat surface, not a row of blobs. Particles touching a solid face
+// are mirrored across it, so the field meets walls square (no meniscus) and fills the gap particles keep from walls.
+// That distance is only right near the surface (it bottoms out at -radius), so a distance transform then gives depth
+// below it, through solids as if they were water, so walls don't count as surface.
+// Output is RGBA8, one texel per sample: red the signed distance over +-band, green the weighted churn, blue the depth
+// below the open surface over 0..depth px (in air: how closed the sample's pocket is), alpha the weighted particle speed over 0..max_speed.
+PackedByteArray FLIPWaterSimulation::build_surface(const Vector2 &p_origin, const Vector2i &p_samples, double p_spacing, double p_kernel, double p_radius, double p_band, double p_ghost_reach, int p_smooth, double p_level, double p_level_tol, double p_settle, double p_depth, double p_pocket) {
+	int w = std::max(p_samples.x, 1);
+	int ht = std::max(p_samples.y, 1);
+	size_t n = static_cast<size_t>(w) * ht;
+	surf_w.assign(n, 0.0f);
+	surf_x.assign(n, 0.0f);
+	surf_y.assign(n, 0.0f);
+	surf_c.assign(n, 0.0f);
+	surf_s.assign(n, 0.0f);
+	surf_phi.resize(n);
+	surf_tmp.resize(n);
+	surf_solid.resize(n);
+	surf_nx = w;
+	surf_ny = ht;
+	surf_sp = static_cast<float>(std::max(p_spacing, 0.5));
+	surf_kernel = static_cast<float>(std::max(p_kernel, p_spacing));
+	surf_reach = static_cast<float>(p_ghost_reach);
+	surf_origin = p_origin;
+	float sp = surf_sp;
 
-	double min2 = p_min_speed * p_min_speed;
-	int count = 0;
-	for (size_t i = 0; i < p_positions.size(); i++) {
-		if (p_velocities[i].length_squared() >= min2) {
-			count++;
+
+	// The particles in reach, with the solid faces they touch.
+	double h = cell_size;
+	auto solid = [&](int ci, int cj) {
+		return !_is_cell_in_bounds(ci, cj) || s[ci + f_num_x * cj] == 0.0;
+	};
+	float margin = surf_kernel + surf_reach + 2.0f * sp;
+	float lo_x = p_origin.x - margin, hi_x = p_origin.x + w * sp + margin;
+	float lo_y = p_origin.y - margin, hi_y = p_origin.y + ht * sp + margin;
+	const float none = std::numeric_limits<float>::quiet_NaN();
+	const float ceiling_reach = static_cast<float>(1.25 * this->p_radius);
+	const double loaded_pressure = std::max(DENSITY * static_cast<double>(gravity.length()) * cell_size, 1e-6);
+	surf_parts.clear();
+	for (size_t p = 0; p < p_positions.size(); p++) {
+		float px = p_positions[p].x;
+		float py = p_positions[p].y;
+		if (px < lo_x || px > hi_x || py < lo_y || py > hi_y) {
+			continue;
+		}
+		SurfParticle sp_ = { px, py, p_churn[p], static_cast<float>(p_velocities[p].length()), none, none };
+		if (surf_reach > 0.0f) {
+			int ci = static_cast<int>(std::floor(px / h));
+			int cj = static_cast<int>(std::floor(py / h));
+			if (px - ci * h < surf_reach && solid(ci - 1, cj)) {
+				sp_.face_x = static_cast<float>(ci * h);
+			} else if ((ci + 1) * h - px < surf_reach && solid(ci + 1, cj)) {
+				sp_.face_x = static_cast<float>((ci + 1) * h);
+			}
+			// A face overhead mirrors water according to the pressure under it. Water under load (a cell or more of
+			// water standing above it somewhere) is pushed against the face, and the gap the particles leave there
+			// is not air, so it is mirrored across a whole cell. Water under no load hangs below the block with a
+			// surface of its own: mirroring it would draw it reaching up to hug the block, so there only particles
+			// pressed against the face are mirrored.
+			float overhead = surf_reach;
+			if (solid(ci, cj - 1) && _is_cell_in_bounds(ci, cj)) {
+				float loaded = static_cast<float>(std::clamp(pressure[ci + f_num_x * cj] / loaded_pressure - 0.5, 0.0, 1.0));
+				overhead = ceiling_reach + (std::max(surf_reach, static_cast<float>(h)) - ceiling_reach) * loaded;
+			}
+			if (py - cj * h < overhead && solid(ci, cj - 1)) {
+				sp_.face_y = static_cast<float>(cj * h);
+			} else if ((cj + 1) * h - py < surf_reach && solid(ci, cj + 1)) {
+				sp_.face_y = static_cast<float>((cj + 1) * h);
+			}
+		}
+		surf_parts.push_back(sp_);
+	}
+
+	// Rows are independent: each chunk splats every particle near its rows into those rows only.
+	_run_parallel(ht, 8, &FLIPWaterSimulation::_surface_rows);
+
+	float *W = surf_w.data(), *C = surf_c.data();
+	surf_band = static_cast<float>(std::max(p_band, 0.5));
+	surf_radius = static_cast<float>(p_radius);
+	float band = surf_band;
+	_run_parallel(ht, 8, &FLIPWaterSimulation::_surface_phi_rows);
+
+	// [1 2 1] passes, separable: evens out the particles' small jitter along the surface.
+	for (int pass = 0; pass < p_smooth; pass++) {
+		_run_parallel(ht, 8, &FLIPWaterSimulation::_surface_smooth_x_rows);
+		_run_parallel(ht, 8, &FLIPWaterSimulation::_surface_smooth_y_rows);
+	}
+
+	// Pockets: air samples (outside water and solids) are grouped into connected patches. A patch that reaches the
+	// grid's edge is open air. An enclosed one is a pocket, and how open it counts grows with its area, from a
+	// quarter of `pocket` px^2 to all of it. Small pockets (a gap in a corner, a vortex core just forming) are drawn
+	// filled in, and they open up as they grow rather than popping in with a full rim and glow.
+	std::vector<float> &d = surf_tmp;
+	const float depth_range = std::max(static_cast<float>(p_depth), band);
+	const float far = depth_range + 2.0f * sp;
+	float pocket_full = std::max(static_cast<float>(p_pocket), 1.0f) / (sp * sp);
+	float pocket_none = 0.25f * pocket_full;
+	std::vector<int32_t> &stack = surf_stack;
+	std::vector<int32_t> &patch = surf_patch;
+	std::vector<uint8_t> &seen = surf_seen;
+	seen.assign(n, 0);
+	for (size_t idx = 0; idx < n; idx++) {
+		bool air = surf_phi[idx] >= 0.0f && !surf_solid[idx];
+		d[idx] = far;
+		if (!air) {
+			seen[idx] = 1;
+		}
+	}
+	for (size_t start = 0; start < n; start++) {
+		if (seen[start]) {
+			continue;
+		}
+		bool open = false;
+		patch.clear();
+		stack.clear();
+		stack.push_back(static_cast<int32_t>(start));
+		seen[start] = 1;
+		while (!stack.empty()) {
+			int32_t idx = stack.back();
+			stack.pop_back();
+			patch.push_back(idx);
+			int i = idx % w;
+			int j = idx / w;
+			if (i == 0 || j == 0 || i == w - 1 || j == ht - 1) {
+				open = true;
+			}
+			if (i > 0 && !seen[idx - 1]) {
+				seen[idx - 1] = 1;
+				stack.push_back(idx - 1);
+			}
+			if (i < w - 1 && !seen[idx + 1]) {
+				seen[idx + 1] = 1;
+				stack.push_back(idx + 1);
+			}
+			if (j > 0 && !seen[idx - w]) {
+				seen[idx - w] = 1;
+				stack.push_back(idx - w);
+			}
+			if (j < ht - 1 && !seen[idx + w]) {
+				seen[idx + w] = 1;
+				stack.push_back(idx + w);
+			}
+		}
+		float openness = 1.0f;
+		if (!open) {
+			float t = std::clamp((patch.size() - pocket_none) / std::max(pocket_full - pocket_none, 1.0f), 0.0f, 1.0f);
+			openness = t * t * (3.0f - 2.0f * t);
+		}
+		float cost = (1.0f - openness) * depth_range;
+		for (int32_t idx : patch) {
+			d[idx] = cost;
 		}
 	}
 
-	// Grow the instance buffer geometrically and hide the unused tail, so it isn't reallocated every frame.
+	// Depth: chamfer distance from air into water and solids, on top of what the air's patch costs. Sideways steps
+	// cost less than vertical ones, so depth mostly means "how far below the surface": the shading runs in level
+	// bands that reach in under overhangs, instead of fanning out from wherever the surface meets a block.
+	const float side = 0.45f;
+	float dx1 = sp * side;
+	float dy1 = sp;
+	float dd = sp * std::sqrt(1.0f + side * side);
+	for (int j = 1; j < ht; j++) {
+		float *row = d.data() + static_cast<size_t>(j) * w;
+		const float *up = row - w;
+		for (int i = 1; i < w - 1; i++) {
+			float v = std::min(std::min(row[i - 1] + dx1, up[i] + dy1), std::min(up[i - 1] + dd, up[i + 1] + dd));
+			row[i] = std::min(row[i], v);
+		}
+	}
+	for (int j = ht - 2; j >= 0; j--) {
+		float *row = d.data() + static_cast<size_t>(j) * w;
+		const float *down = row + w;
+		for (int i = w - 2; i >= 1; i--) {
+			float v = std::min(std::min(row[i + 1] + dx1, down[i] + dy1), std::min(down[i + 1] + dd, down[i - 1] + dd));
+			row[i] = std::min(row[i], v);
+		}
+	}
+	for (size_t idx = 0; idx < n; idx++) {
+		if (surf_phi[idx] < 0.0f) {
+			// Near the surface the reconstruction is exact; deeper, the transform's depth (half a sample short, so
+			// the two meet without a step). The signed distance only ever needs true distance, so pockets and the
+			// cheaper sideways steps are left out of it by never letting the transform shorten it.
+			float depth = std::max(-surf_phi[idx], d[idx] - 0.5f * sp);
+			surf_phi[idx] = -std::min(std::max(-surf_phi[idx], std::min(depth, band)), band);
+			d[idx] = std::min(depth, depth_range);
+		} else {
+			// In air this holds how closed the sample's pocket is, in the same px: zero in open air.
+			d[idx] = std::min(d[idx], depth_range);
+		}
+	}
+
+	// The depth goes out in blue, blurred a little so it shades smoothly, and eased toward last frame's so shading
+	// and pockets fade in and out over a few frames. Air that was water a frame ago takes its value at once:
+	// easing there would leave a ghost of the water behind a surface that is falling away.
+	surf_depth.resize(n);
+	bool have_prev = surf_prev_sp == sp && !surf_prev.empty() && surf_depth_prev.size() == surf_prev.size();
+	int shift_i = static_cast<int>(std::lround((p_origin.x - surf_prev_origin.x) / sp));
+	int shift_j = static_cast<int>(std::lround((p_origin.y - surf_prev_origin.y) / sp));
+	const float ease = 0.3f;
+	for (int j = 0; j < ht; j++) {
+		for (int i = 0; i < w; i++) {
+			size_t idx = static_cast<size_t>(j) * w + i;
+			float sum = 0.0f;
+			for (int dj = -1; dj <= 1; dj++) {
+				int jj = std::clamp(j + dj, 0, ht - 1);
+				for (int di = -1; di <= 1; di++) {
+					sum += d[static_cast<size_t>(jj) * w + std::clamp(i + di, 0, w - 1)];
+				}
+			}
+			float now = std::clamp(sum / (9.0f * depth_range), 0.0f, 1.0f);
+			int pi = i + shift_i;
+			int pj = j + shift_j;
+			if (have_prev && pi >= 0 && pi < surf_prev_nx && pj >= 0 && pj < surf_prev_ny) {
+				size_t pidx = static_cast<size_t>(pj) * surf_prev_nx + pi;
+				bool air = surf_phi[idx] >= 0.0f && !surf_solid[idx];
+				if (!(air && surf_prev[pidx] < 0.0f)) {
+					float before = surf_depth_prev[pidx];
+					now = before + (now - before) * ease;
+				}
+			}
+			surf_depth[idx] = now;
+		}
+	}
+	surf_depth_prev = surf_depth;
+
+	// Levelling: each sample averages its row out to `level` px either side, stopping at solids, over neighbours whose
+	// distance is within `level_tol` of what the row's local slope predicts. Along a surface, neighbours differ from
+	// that by its dips, bumps and particle-row steps, so those even out into a smooth line while broad waves stay.
+	// Across a drop's edge they differ by more and are left out, so splashes keep their shape.
+	// Both passes are for calm water only: an upward-facing surface with water at least ~16 px deep under it. Streams,
+	// drops and sheets are left exactly as the particles put them; levelling them across frames whittles them into
+	// shards.
+	{
+		surf_flat.assign(n, 0.0f);
+		int below = std::max(1, static_cast<int>(std::lround(16.0f / sp)));
+		// The slope is read over ±3 samples, so a particle-row step (which tilts the surface right at it) still counts as flat.
+		int s3 = 3;
+		for (int j = s3; j < ht - s3; j++) {
+			for (int i = s3; i < w - s3; i++) {
+				size_t idx = static_cast<size_t>(j) * w + i;
+				if (surf_solid[idx] || j + below >= ht) {
+					continue;
+				}
+				float gx = (surf_phi[idx + s3] - surf_phi[idx - s3]) / (2.0f * s3);
+				float gy = (surf_phi[idx + static_cast<size_t>(s3) * w] - surf_phi[idx - static_cast<size_t>(s3) * w]) / (2.0f * s3);
+				float g = std::sqrt(gx * gx + gy * gy);
+				if (g < 0.2f * sp) {
+					continue;
+				}
+				float up = std::clamp((-gy / g - 0.5f) / 0.3f, 0.0f, 1.0f);
+				float deep = std::clamp((-surf_phi[idx + static_cast<size_t>(below) * w] - 4.0f) / 8.0f, 0.0f, 1.0f);
+				surf_flat[idx] = up * up * (3.0f - 2.0f * up) * deep * deep * (3.0f - 2.0f * deep);
+			}
+		}
+	}
+	surf_level = static_cast<int>(std::lround(std::max(p_level, 0.0) / sp));
+	surf_level_tol = static_cast<float>(std::max(p_level_tol, 0.01));
+	if (surf_level > 0) {
+		_run_parallel(ht, 8, &FLIPWaterSimulation::_surface_level_rows);
+		surf_phi.swap(surf_tmp);
+	}
+
+	// Settling: blends toward last frame's field where the two are close, which calms the particles' frame-to-frame
+	// jitter. Where they differ by more than the tolerance (water that moved), this frame wins outright, so nothing trails.
+	float settle = static_cast<float>(std::clamp(p_settle, 0.0, 0.95));
+	if (settle > 0.0f && surf_prev_sp == sp && !surf_prev.empty()) {
+		int di = static_cast<int>(std::lround((p_origin.x - surf_prev_origin.x) / sp));
+		int dj = static_cast<int>(std::lround((p_origin.y - surf_prev_origin.y) / sp));
+		float tol = surf_level_tol;
+		for (int j = 0; j < ht; j++) {
+			int pj = j + dj;
+			if (pj < 0 || pj >= surf_prev_ny) {
+				continue;
+			}
+			for (int i = 0; i < w; i++) {
+				int pi = i + di;
+				if (pi < 0 || pi >= surf_prev_nx) {
+					continue;
+				}
+				size_t idx = static_cast<size_t>(j) * w + i;
+				float prev = surf_prev[static_cast<size_t>(pj) * surf_prev_nx + pi];
+				float diff = (prev - surf_phi[idx]) / tol;
+				float keep = settle * surf_flat[idx] * std::max(0.0f, 1.0f - diff * diff);
+				surf_phi[idx] += (prev - surf_phi[idx]) * keep;
+			}
+		}
+	}
+	surf_prev = surf_phi;
+	surf_prev_origin = p_origin;
+	surf_prev_nx = w;
+	surf_prev_ny = ht;
+	surf_prev_sp = sp;
+
+	float speed_range = max_speed > 0.0 ? static_cast<float>(max_speed) : 1000.0f;
+	PackedByteArray out;
+	out.resize(static_cast<int64_t>(n) * 4);
+	uint8_t *o = out.ptrw();
+	for (size_t idx = 0; idx < n; idx++) {
+		float red = 0.5f + surf_phi[idx] / (2.0f * band);
+		float churn = W[idx] > 1e-6f ? C[idx] : 0.0f;
+		o[idx * 4 + 0] = static_cast<uint8_t>(std::lround(std::clamp(red, 0.0f, 1.0f) * 255.0f));
+		o[idx * 4 + 1] = static_cast<uint8_t>(std::lround(std::clamp(churn, 0.0f, 1.0f) * 255.0f));
+		float speed = W[idx] > 1e-6f ? surf_s[idx] / speed_range : 0.0f;
+		o[idx * 4 + 2] = static_cast<uint8_t>(std::lround(surf_depth[idx] * 255.0f));
+		o[idx * 4 + 3] = static_cast<uint8_t>(std::lround(std::clamp(speed, 0.0f, 1.0f) * 255.0f));
+	}
+	return out;
+}
+
+void FLIPWaterSimulation::_surface_phi_rows(int begin, int end) {
+	int w = surf_nx;
+	float sp = surf_sp;
+	float ox = surf_origin.x;
+	float oy = surf_origin.y;
+	float band = surf_band;
+	float r = surf_radius;
+	double inv_h = 1.0 / cell_size;
+	float *W = surf_w.data(), *X = surf_x.data(), *Y = surf_y.data(), *C = surf_c.data();
+	for (int j = begin; j < end; j++) {
+		float sy = oy + (j + 0.5f) * sp;
+		int cj = static_cast<int>(std::floor(sy * inv_h));
+		for (int i = 0; i < w; i++) {
+			size_t idx = static_cast<size_t>(j) * w + i;
+			float sx = ox + (i + 0.5f) * sp;
+			float phi = band;
+			if (W[idx] > 1e-6f) {
+				float cx = X[idx] / W[idx] - sx;
+				float cy = Y[idx] / W[idx] - sy;
+				phi = std::sqrt(cx * cx + cy * cy) - r;
+				C[idx] /= W[idx];
+				surf_s[idx] /= W[idx];
+			}
+			surf_phi[idx] = std::clamp(phi, -band, band);
+			int ci = static_cast<int>(std::floor(sx * inv_h));
+			surf_solid[idx] = (!_is_cell_in_bounds(ci, cj) || s[ci + f_num_x * cj] == 0.0) ? 1 : 0;
+		}
+	}
+}
+
+void FLIPWaterSimulation::_surface_smooth_x_rows(int begin, int end) {
+	int w = surf_nx;
+	for (int j = begin; j < end; j++) {
+		const float *src = surf_phi.data() + static_cast<size_t>(j) * w;
+		float *dst = surf_tmp.data() + static_cast<size_t>(j) * w;
+		for (int i = 0; i < w; i++) {
+			dst[i] = 0.25f * (src[i > 0 ? i - 1 : i] + 2.0f * src[i] + src[i < w - 1 ? i + 1 : i]);
+		}
+	}
+}
+
+void FLIPWaterSimulation::_surface_smooth_y_rows(int begin, int end) {
+	int w = surf_nx;
+	int ht = surf_ny;
+	for (int j = begin; j < end; j++) {
+		const float *mid = surf_tmp.data() + static_cast<size_t>(j) * w;
+		const float *up = surf_tmp.data() + static_cast<size_t>(j > 0 ? j - 1 : j) * w;
+		const float *down = surf_tmp.data() + static_cast<size_t>(j < ht - 1 ? j + 1 : j) * w;
+		float *dst = surf_phi.data() + static_cast<size_t>(j) * w;
+		for (int i = 0; i < w; i++) {
+			dst[i] = 0.25f * (up[i] + 2.0f * mid[i] + down[i]);
+		}
+	}
+}
+
+void FLIPWaterSimulation::_surface_level_rows(int begin, int end) {
+	int w = surf_nx;
+	int k = surf_level;
+	float inv_tol = 1.0f / surf_level_tol;
+	float inv_k = 1.0f / (k + 1);
+	for (int j = begin; j < end; j++) {
+		const float *src = surf_phi.data() + static_cast<size_t>(j) * w;
+		const uint8_t *sol = surf_solid.data() + static_cast<size_t>(j) * w;
+		float *dst = surf_tmp.data() + static_cast<size_t>(j) * w;
+		const float *flat = surf_flat.data() + static_cast<size_t>(j) * w;
+		for (int i = 0; i < w; i++) {
+			float self = src[i];
+			if (sol[i]) {
+				dst[i] = self;
+				continue;
+			}
+			// The row's slope across the whole reach (wide, so a step in the middle barely tilts it), so a sloping surface
+			// compares neighbours with where the slope puts them.
+			int l = i, r = i;
+			for (int o = 1; o <= k && l > 0 && !sol[l - 1]; o++) {
+				l--;
+			}
+			for (int o = 1; o <= k && r < w - 1 && !sol[r + 1]; o++) {
+				r++;
+			}
+			float slope = r > l ? (src[r] - src[l]) / (r - l) : 0.0f;
+			// Averages how far neighbours sit off that slope, so a one-sided average (by a wall) doesn't drag it.
+			float sum = 0.0f;
+			float wsum = 1.0f;
+			for (int dir = -1; dir <= 1; dir += 2) {
+				for (int o = 1; o <= k; o++) {
+					int ni = i + dir * o;
+					if (ni < 0 || ni >= w || sol[ni]) {
+						break;
+					}
+					float s_ = 1.0f - (o * inv_k) * (o * inv_k);
+					float off = src[ni] - self - slope * (dir * o);
+					float r_ = off * inv_tol;
+					float r2 = 1.0f - r_ * r_;
+					if (r2 <= 0.0f) {
+						continue;
+					}
+					float wt = s_ * s_ * r2 * r2;
+					sum += off * wt;
+					wsum += wt;
+				}
+			}
+			dst[i] = self + flat[i] * sum / wsum;
+		}
+	}
+}
+
+void FLIPWaterSimulation::_surface_rows(int begin, int end) {
+	int w = surf_nx;
+	float sp = surf_sp;
+	float inv = 1.0f / sp;
+	float R = surf_kernel;
+	float R2 = R * R;
+	float invR2 = 1.0f / R2;
+	float ox = surf_origin.x;
+	float oy = surf_origin.y;
+	float lo_x = ox - R, hi_x = ox + w * sp + R;
+	float lo_y = oy + begin * sp - R, hi_y = oy + end * sp + R;
+	float *W = surf_w.data(), *X = surf_x.data(), *Y = surf_y.data(), *C = surf_c.data();
+
+	float *S = surf_s.data();
+	double h = cell_size;
+	auto solid = [&](int ci, int cj) {
+		return !_is_cell_in_bounds(ci, cj) || s[ci + f_num_x * cj] == 0.0;
+	};
+	// A ghost (a particle mirrored across a solid face) stands for water pressed against that face, so it only counts
+	// where the face is: at samples whose row (a side face) or column (a floor or ceiling) runs into the block it was
+	// mirrored across. Anywhere else it would pull the surface toward a block the water isn't touching: up the sides
+	// of a pillar the water passes under, or over the lip of a ledge. `wall_x`/`wall_y` are the cell column/row of
+	// that block (-1 none).
+	auto splat = [&](float px, float py, float churn, float speed, int wall_x = -1, int wall_y = -1) {
+		if (px < lo_x || px > hi_x || py < lo_y || py > hi_y) {
+			return;
+		}
+		int i0 = std::max(0, static_cast<int>(std::ceil((px - R - ox) * inv - 0.5f)));
+		int i1 = std::min(w - 1, static_cast<int>(std::floor((px + R - ox) * inv - 0.5f)));
+		int j0 = std::max(begin, static_cast<int>(std::ceil((py - R - oy) * inv - 0.5f)));
+		int j1 = std::min(end - 1, static_cast<int>(std::floor((py + R - oy) * inv - 0.5f)));
+		for (int j = j0; j <= j1; j++) {
+			float dy = oy + (j + 0.5f) * sp - py;
+			float dy2 = dy * dy;
+			size_t row = static_cast<size_t>(j) * w;
+			int cell_j = static_cast<int>(std::floor((oy + (j + 0.5f) * sp) / h));
+			if (wall_x >= 0 && !solid(wall_x, cell_j)) {
+				continue;
+			}
+			for (int i = i0; i <= i1; i++) {
+				float dx = ox + (i + 0.5f) * sp - px;
+				float d2 = dx * dx + dy2;
+				if (d2 >= R2) {
+					continue;
+				}
+				if (wall_y >= 0 && !solid(static_cast<int>(std::floor((ox + (i + 0.5f) * sp) / h)), wall_y)) {
+					continue;
+				}
+				float q = 1.0f - d2 * invR2;
+				float k = q * q * q;
+				size_t idx = row + i;
+				W[idx] += k;
+				X[idx] += k * px;
+				Y[idx] += k * py;
+				C[idx] += k * churn;
+				S[idx] += k * speed;
+			}
+		}
+	};
+	for (const SurfParticle &q : surf_parts) {
+		splat(q.x, q.y, q.churn, q.speed);
+		bool hx = !std::isnan(q.face_x);
+		bool hy = !std::isnan(q.face_y);
+		float gx = hx ? 2.0f * q.face_x - q.x : q.x;
+		float gy = hy ? 2.0f * q.face_y - q.y : q.y;
+		// The block each face belongs to: on the ghost's side of it.
+		int wx = hx ? static_cast<int>(std::floor(q.face_x / h)) - (q.x > q.face_x ? 1 : 0) : -1;
+		int wy = hy ? static_cast<int>(std::floor(q.face_y / h)) - (q.y > q.face_y ? 1 : 0) : -1;
+		if (hx) {
+			splat(gx, q.y, q.churn, q.speed, wx, -1);
+		}
+		if (hy) {
+			splat(q.x, gy, q.churn, q.speed, -1, wy);
+		}
+		if (hx && hy) {
+			splat(gx, gy, q.churn, q.speed, wx, wy);
+		}
+	}
+}
+
+// Up to `probes` random particles in the rect, each kept with probability equal to its churn (if at least min_churn).
+PackedVector2Array FLIPWaterSimulation::sample_churned(const Rect2 &p_rect, int p_probes, double p_min_churn) {
+	PackedVector2Array out;
+	size_t count = p_positions.size();
+	if (count == 0) {
+		return out;
+	}
+	std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+	for (int k = 0; k < p_probes; k++) {
+		size_t i = static_cast<size_t>(rng()) % count;
+		float churn = p_churn[i];
+		if (churn >= p_min_churn && churn > 0.0f && unit(rng) < churn && p_rect.has_point(p_positions[i])) {
+			out.push_back(p_positions[i]);
+		}
+	}
+	return out;
+}
+
+// The grid's velocity at a point, interpolated as particles read it.
+Vector2 FLIPWaterSimulation::sample_velocity(const Vector2 &p_pos) const {
+	if (f_num_x < 2 || f_num_y < 2) {
+		return Vector2();
+	}
+	double h = cell_size;
+	double h1 = f_inv_spacing;
+	double h2 = 0.5 * h;
+	Vector2 result;
+	for (int component = 0; component < 2; component++) {
+		double dx = component == 0 ? 0.0 : h2;
+		double dy = component == 0 ? h2 : 0.0;
+		const std::vector<double> &f = component == 0 ? u : v;
+		double x = std::clamp(static_cast<double>(p_pos.x), h, f_num_x * h);
+		double y = std::clamp(static_cast<double>(p_pos.y), h, f_num_y * h);
+		int x0 = std::min(static_cast<int>(std::floor((x - dx) * h1)), f_num_x - 1);
+		double tx = ((x - dx) - x0 * h) * h1;
+		int x1 = std::min(x0 + 1, f_num_x - 1);
+		int y0 = std::min(static_cast<int>(std::floor((y - dy) * h1)), f_num_y - 1);
+		double ty = ((y - dy) - y0 * h) * h1;
+		int y1 = std::min(y0 + 1, f_num_y - 1);
+		double sx = 1.0 - tx;
+		double sy = 1.0 - ty;
+		double wts[4] = { sx * sy, tx * sy, tx * ty, sx * ty };
+		int nr[4] = { x0 + (f_num_x * y0), x1 + (f_num_x * y0), x1 + (f_num_x * y1), x0 + (f_num_x * y1) };
+		int offset = component == 1 ? f_num_x : 1;
+		double total = 0.0;
+		double sum = 0.0;
+		for (int k = 0; k < 4; k++) {
+			if (nr[k] - offset >= 0 && cell_types[nr[k]] != SOLID_CELL && cell_types[nr[k] - offset] != SOLID_CELL) {
+				total += wts[k];
+				sum += wts[k] * f[nr[k]];
+			}
+		}
+		double value = total > 0.0 ? sum / total : 0.0;
+		if (component == 0) {
+			result.x = value;
+		} else {
+			result.y = value;
+		}
+		if (total > 0.0) {
+			// As the particles that read it are given (see _grid_to_particles_range): still water reads zero.
+			result += Vector2(component == 0 ? gravity.x : 0.0, component == 1 ? gravity.y : 0.0) * step_dt;
+		}
+	}
+	return result;
+}
+
+// `mirror` > 0 also writes a copy of each particle within that many px of a solid face, mirrored across it (and one
+// mirrored across both faces in a corner), as build_surface does with its ghosts: water drawn by summing splats then
+// meets a wall square instead of stopping short of it where particles keep their gap and have neighbours on one side
+// only. A ceiling mirrors only water pressed up against it (under load, or filling the space under it), so water
+// hanging below a block keeps a surface of its own instead of reaching up to hug it.
+//
+// `ground` > 0, on a mesh that uses colours, tells the mesh's shader how each particle lies, so that it can draw
+// loose water by its shape and not as a ball. Green is 1 for a particle within `ground` px of a floor under it, and
+// blue is then that distance over `ground`; its quad is left square to the world, unturned and unstretched. Green is
+// 0 for any other particle, and blue is then its speed over 600 px/s. Green is a half for the copies and the
+// fillers, which are there for the summed density only. Red stays the churn.
+void FLIPWaterSimulation::update_multimesh(const Ref<MultiMesh> &p_multimesh, double p_scale, double p_min_speed, double p_stretch, double p_max_stretch, int p_every, double p_min_churn, double p_mirror, double p_ground) const {
+	ERR_FAIL_COND(p_multimesh.is_null());
+	ERR_FAIL_COND_MSG(p_multimesh->get_transform_format() != MultiMesh::TRANSFORM_2D, "MultiMesh must use TRANSFORM_2D.");
+	ERR_FAIL_COND_MSG(p_multimesh->is_using_custom_data(), "MultiMesh must not use custom data.");
+	bool colors = p_multimesh->is_using_colors();
+	int stride = colors ? 12 : 8;
+	float min_churn = static_cast<float>(p_min_churn);
+	double min2 = p_min_speed * p_min_speed;
+	size_t every = static_cast<size_t>(std::max(p_every, 1));
+
+	struct Instance {
+		Vector2 pos, vel;
+		float churn;
+		float lies = 0.5f; // the colour's green: 1 on a floor, 0 in the air, a half for a copy
+		float floor = 0.0f; // px down to the floor, for one that lies on it
+	};
+	thread_local std::vector<Instance> instances;
+	instances.clear();
+	double h = cell_size;
+	float reach = static_cast<float>(p_mirror);
+	auto solid = [&](int ci, int cj) {
+		return !_is_cell_in_bounds(ci, cj) || s[ci + f_num_x * cj] == 0.0;
+	};
+	const float ceiling_reach = static_cast<float>(1.25 * p_radius);
+	const double loaded_pressure = std::max(DENSITY * static_cast<double>(gravity.length()) * cell_size, 1e-6);
+	for (size_t i = 0; i < p_positions.size(); i += every) {
+		if (p_velocities[i].length_squared() < min2 || p_churn[i] < min_churn) {
+			continue;
+		}
+		Vector2 p = p_positions[i];
+		Vector2 v = p_velocities[i];
+		int ci = static_cast<int>(std::floor(p.x / h));
+		int cj = static_cast<int>(std::floor(p.y / h));
+		float to_floor = static_cast<float>((cj + 1) * h - p.y);
+		bool on_floor = p_ground > 0.0 && to_floor < p_ground && solid(ci, cj + 1) && !solid(ci, cj);
+		instances.push_back({ p, v, p_churn[i], on_floor ? 1.0f : 0.0f, on_floor ? to_floor : 0.0f });
+		if (reach <= 0.0f) {
+			continue;
+		}
+		double fx = std::numeric_limits<double>::quiet_NaN();
+		double fy = fx;
+		if (p.x - ci * h < reach && solid(ci - 1, cj)) {
+			fx = ci * h;
+		} else if ((ci + 1) * h - p.x < reach && solid(ci + 1, cj)) {
+			fx = (ci + 1) * h;
+		}
+		float overhead = reach;
+		if (solid(ci, cj - 1) && _is_cell_in_bounds(ci, cj)) {
+			// Water is pressed up against a ceiling when it is under load, or when there is water under it: water held
+			// up in a sealed cave has no load. A drip hanging under a block has air below it, and keeps its own surface.
+			float loaded = static_cast<float>(std::clamp(pressure[ci + f_num_x * cj] / loaded_pressure - 0.5, 0.0, 1.0));
+			if (_is_cell_in_bounds(ci, cj + 1) && cell_types[ci + f_num_x * (cj + 1)] == FLUID_CELL) {
+				loaded = 1.0f;
+			}
+			overhead = ceiling_reach + (std::max(reach, static_cast<float>(h)) - ceiling_reach) * loaded;
+		}
+		if (p.y - cj * h < overhead && solid(ci, cj - 1)) {
+			fy = cj * h;
+		} else if ((cj + 1) * h - p.y < reach && solid(ci, cj + 1)) {
+			fy = (cj + 1) * h;
+		}
+		bool hx = !std::isnan(fx);
+		bool hy = !std::isnan(fy);
+		if (hx) {
+			instances.push_back({ Vector2(2.0 * fx - p.x, p.y), Vector2(-v.x, v.y), p_churn[i] });
+		}
+		if (hy) {
+			instances.push_back({ Vector2(p.x, 2.0 * fy - p.y), Vector2(v.x, -v.y), p_churn[i] });
+		}
+		if (hx && hy) {
+			instances.push_back({ Vector2(2.0 * fx - p.x, 2.0 * fy - p.y), -v, p_churn[i] });
+		}
+	}
+	// Against a ceiling the water's top cell is often sparse (one or two particles of a full cell's four, sitting low),
+	// and now and then a cell-high layer of air is held there; either way it drew as a dark scalloped strip under every
+	// block in a flooded cave. So a cell under a ceiling with water under it is drawn full, as a lattice of splats like
+	// a full cell's, mirrored across the faces beside it: when it is water itself, or air in a run that is one cell high
+	// and closed at both ends (by blocks or water). A run of air open at an end is real air (a surface with open air
+	// beside it), a taller air bell has air under its top row, and a drip under a block has air under it, so none is
+	// filled. Water against a side wall is filled the same way, with water beyond it and water or a block over it: never
+	// at the water's surface, where filling would draw the water climbing the wall. A mesh of the churned particles
+	// alone gets none: the fillers have no churn.
+	if (reach > 0.0f && min_churn <= 0.0f) {
+		auto air = [&](int i, int j) {
+			return _is_cell_in_bounds(i, j) && s[i + f_num_x * j] != 0.0 && cell_types[i + f_num_x * j] == AIR_CELL;
+		};
+		auto water = [&](int i, int j) {
+			return _is_cell_in_bounds(i, j) && cell_types[i + f_num_x * j] == FLUID_CELL;
+		};
+		auto under_ceiling = [&](int i, int j) { return (air(i, j) || water(i, j)) && solid(i, j - 1) && water(i, j + 1); };
+		int per = std::max(particles_per_side, 1);
+		auto fill = [&](int c, int j) {
+			for (int a = 0; a < per; a++) {
+				for (int b = 0; b < per; b++) {
+					Vector2 at((c + (a + 0.5) / per) * h, (j + (b + 0.5) / per) * h);
+					instances.push_back({ at, Vector2(), 0.0f });
+					if (solid(c, j - 1) && at.y - j * h < reach) {
+						instances.push_back({ Vector2(at.x, 2.0 * j * h - at.y), Vector2(), 0.0f });
+					}
+					if (solid(c - 1, j) && at.x - c * h < reach) {
+						instances.push_back({ Vector2(2.0 * c * h - at.x, at.y), Vector2(), 0.0f });
+					} else if (solid(c + 1, j) && (c + 1) * h - at.x < reach) {
+						instances.push_back({ Vector2(2.0 * (c + 1) * h - at.x, at.y), Vector2(), 0.0f });
+					}
+				}
+			}
+		};
+		for (int j = 1; j < f_num_y - 1; j++) {
+			int i = 1;
+			while (i < f_num_x - 1) {
+				if (!under_ceiling(i, j)) {
+					i++;
+					continue;
+				}
+				int start = i;
+				bool has_air = false;
+				while (i < f_num_x - 1 && under_ceiling(i, j)) {
+					has_air = has_air || air(i, j);
+					i++;
+				}
+				bool closed = !air(start - 1, j) && !air(i, j);
+				for (int c = start; c < i; c++) {
+					if (water(c, j) || (has_air && closed)) {
+						fill(c, j);
+					}
+				}
+			}
+		}
+		for (int j = 1; j < f_num_y - 1; j++) {
+			for (int i = 1; i < f_num_x - 1; i++) {
+				if (!water(i, j) || under_ceiling(i, j) || !(water(i, j - 1) || solid(i, j - 1))) {
+					continue;
+				}
+				if ((solid(i - 1, j) && water(i + 1, j)) || (solid(i + 1, j) && water(i - 1, j))) {
+					fill(i, j);
+				}
+			}
+		}
+	}
+	int count = static_cast<int>(instances.size());
+
+	// Grow the instance buffer geometrically, so it isn't reallocated every frame. The unused tail is hidden by
+	// leaving its transforms zero (a quad shrunk to a point draws nothing), never by lowering the visible instance
+	// count: Godot's 2D GL renderer uses the number of instances drawn as the step of its per-item vertex attributes,
+	// so every new count is a new vertex layout for the driver to build. A count that follows the particles changes
+	// nearly every frame; the layouts piled up by the thousand, and a few minutes in the driver's cache of them
+	// overflowed and the AMD driver crashed in its draw thread. All of the buffer is drawn, so the count only
+	// changes when the buffer grows.
 	int capacity = p_multimesh->get_instance_count();
 	if (count > capacity) {
 		capacity = std::max(count, capacity + capacity / 2 + 64);
@@ -858,25 +1857,39 @@ void FLIPWaterSimulation::update_multimesh(const Ref<MultiMesh> &p_multimesh, do
 	}
 
 	PackedFloat32Array buffer;
-	buffer.resize(static_cast<int64_t>(capacity) * 8);
+	buffer.resize(static_cast<int64_t>(capacity) * stride);
 	float *w = buffer.ptrw();
 	std::fill(w, w + buffer.size(), 0.0f);
 	float scale = static_cast<float>(p_scale);
-	int n = 0;
-	for (size_t i = 0; i < p_positions.size(); i++) {
-		if (p_velocities[i].length_squared() < min2) {
-			continue;
-		}
+	for (int n = 0; n < count; n++) {
+		const Instance &in = instances[n];
 		// 2D layout: basis.x.x, basis.y.x, padding, origin.x, basis.x.y, basis.y.y, padding, origin.y.
-		float *t = w + static_cast<int64_t>(n) * 8;
-		t[0] = scale;
-		t[3] = p_positions[i].x;
-		t[5] = scale;
-		t[7] = p_positions[i].y;
-		n++;
+		float *t = w + static_cast<int64_t>(n) * stride;
+		// Lengthen along the velocity by `stretch` per px/s, up to `max_stretch` times the scale.
+		double speed = in.vel.length();
+		bool lying = in.lies > 0.75f;
+		float along = lying ? scale : scale * static_cast<float>(std::min(1.0 + p_stretch * speed, std::max(p_max_stretch, 1.0)));
+		Vector2 dir = speed > 0.001 && !lying ? in.vel / speed : Vector2(1, 0);
+		t[0] = dir.x * along;
+		t[1] = -dir.y * scale;
+		t[3] = in.pos.x;
+		t[4] = dir.y * along;
+		t[5] = dir.x * scale;
+		t[7] = in.pos.y;
+		if (colors && p_ground > 0.0) {
+			t[8] = in.churn;
+			t[9] = in.lies;
+			t[10] = lying ? in.floor / static_cast<float>(p_ground) : static_cast<float>(std::min(speed / 600.0, 1.0));
+			t[11] = 1.0f;
+		} else if (colors) {
+			t[8] = t[9] = t[10] = in.churn;
+			t[11] = 1.0f;
+		}
 	}
 	p_multimesh->set_buffer(buffer);
-	p_multimesh->set_visible_instance_count(count);
+	if (p_multimesh->get_visible_instance_count() != -1) {
+		p_multimesh->set_visible_instance_count(-1);
+	}
 }
 
 // Physics colliders
@@ -1272,6 +2285,7 @@ void FLIPWaterSimulation::update(double delta) {
 	if (delta <= 0.0) {
 		return;
 	}
+	q_valid = false;
 
 	if (is_inside_tree() && collision_mask != 0) {
 		if (static_colliders_dirty) {
@@ -1286,8 +2300,11 @@ void FLIPWaterSimulation::update(double delta) {
 	for (int i = 0; i < substeps; i++) {
 		_step(dt);
 	}
+	// Anything that built the query index mid-step saw particles that have since moved.
+	q_valid = false;
 
 	frame_effectors.clear();
+	volume_sources.clear();
 	_update_sensors();
 	frame_effector_ids.clear();
 	_update_render();
@@ -1297,13 +2314,16 @@ void FLIPWaterSimulation::update(double delta) {
 }
 
 void FLIPWaterSimulation::_step(double dt) {
+	step_dt = dt;
 	_apply_effectors(dt);
+	_level_thin_water(dt);
 	_integrate_particles(dt);
 	_push_particles_apart();
 	_handle_collisions();
-	_particles_to_grid();
 	_update_particle_density();
+	_particles_to_grid();
 	_solve_incompressibility(dt);
+	_apply_wall_drag(dt);
 	_run_parallel(static_cast<int>(p_positions.size()), 2048, &FLIPWaterSimulation::_grid_to_particles_range);
 }
 
@@ -1333,6 +2353,96 @@ void FLIPWaterSimulation::_run_job_chunk(uint32_t chunk) {
 	(this->*job_fn)(begin, end);
 }
 
+// Thin water runs off. A cell under the spray density is not solved: its particles are free, so nothing pushes
+// them sideways. That is right for spray in the air, but a thin layer lying on water or on ground just sat where
+// it was: the last row of a pool stood above the rim it should have run over, and a film stopped short of a
+// ledge's edge. So each row of cells is read for such layers: free water with water or ground under it, carried on
+// across solved surface water in the same row and across bare ground (a rim's top, a ledge). Where a run of those
+// ends at a drop (air with nothing under it), the layer's particles are pushed toward that end, as their weight
+// would push them, up to a walking pace; with a drop at both ends each goes to the nearer. A run shut in at both
+// ends (by blocks, by deeper water, by open water at its own level) has nowhere to go and is left alone, so a
+// pool's own top row still settles flat. Read from the last step's cells.
+void FLIPWaterSimulation::_level_thin_water(double dt) {
+	double g = std::abs(gravity.y);
+	if (spray_density <= 0.0 || g <= 0.0 || p_positions.empty()) {
+		return;
+	}
+	const double pull = 0.3;
+	const double top_speed = 120.0;
+
+	// Particles per cell; thin_push then holds, per cell, which way its free water is to go (0 for nowhere).
+	thin_count.assign(f_num_cells, 0);
+	for (size_t i = 0; i < p_positions.size(); i++) {
+		int xi = std::clamp(static_cast<int>(std::floor(p_positions[i].x * f_inv_spacing)), 0, f_num_x - 1);
+		int yi = std::clamp(static_cast<int>(std::floor(p_positions[i].y * f_inv_spacing)), 0, f_num_y - 1);
+		thin_count[xi + (f_num_x * yi)]++;
+	}
+	std::fill(thin_push.begin(), thin_push.end(), 0.0f);
+
+	enum { SHUT, LAYER, PASS, DROP };
+	auto kind = [&](int i, int j) {
+		int idx = i + (f_num_x * j);
+		int under = cell_types[idx + f_num_x];
+		if (cell_types[idx] == SOLID_CELL) {
+			return SHUT;
+		}
+		if (cell_types[idx] == FLUID_CELL) {
+			// Solved water at the surface carries a layer on; deeper water is a wall to it.
+			return cell_types[idx - f_num_x] == AIR_CELL && under != AIR_CELL ? PASS : SHUT;
+		}
+		if (under == AIR_CELL) {
+			return DROP;
+		}
+		if (thin_count[idx] > 0) {
+			// A puddle on the floor stays where it is unless ground run-off is on: it stops the run like a wall.
+			return under == SOLID_CELL && !thin_runoff_ground ? SHUT : LAYER;
+		}
+		return under == SOLID_CELL ? PASS : SHUT;
+	};
+	bool any = false;
+	for (int j = 1; j < f_num_y - 1; j++) {
+		int i = 1;
+		while (i < f_num_x - 1) {
+			int k = kind(i, j);
+			if (k != LAYER && k != PASS) {
+				i++;
+				continue;
+			}
+			int start = i;
+			bool layer = false;
+			while (i < f_num_x - 1 && (k = kind(i, j), k == LAYER || k == PASS)) {
+				layer = layer || k == LAYER;
+				i++;
+			}
+			bool left = start > 1 && kind(start - 1, j) == DROP;
+			bool right = i < f_num_x - 1 && kind(i, j) == DROP;
+			if (!layer || (!left && !right)) {
+				continue;
+			}
+			for (int c = start; c < i; c++) {
+				if (kind(c, j) != LAYER) {
+					continue;
+				}
+				bool go_left = left && (!right || c - start < i - 1 - c);
+				thin_push[c + (f_num_x * j)] = go_left ? -1.0f : 1.0f;
+				any = true;
+			}
+		}
+	}
+	if (!any) {
+		return;
+	}
+	double gain = pull * g * dt;
+	for (size_t i = 0; i < p_positions.size(); i++) {
+		int xi = std::clamp(static_cast<int>(std::floor(p_positions[i].x * f_inv_spacing)), 0, f_num_x - 1);
+		int yi = std::clamp(static_cast<int>(std::floor(p_positions[i].y * f_inv_spacing)), 0, f_num_y - 1);
+		double way = thin_push[xi + (f_num_x * yi)];
+		if (way != 0.0 && p_velocities[i].x * way < top_speed) {
+			p_velocities[i].x += way * gain;
+		}
+	}
+}
+
 void FLIPWaterSimulation::_integrate_particles(double dt) {
 	// Never move more than one cell per step, so particles can't tunnel through walls.
 	double limit = cell_size / dt;
@@ -1340,8 +2450,8 @@ void FLIPWaterSimulation::_integrate_particles(double dt) {
 		limit = std::min(limit, max_speed);
 	}
 
+	// Gravity is already in the velocities: each step ends by adding the next one's (see _grid_to_particles_range).
 	for (size_t i = 0; i < p_positions.size(); i++) {
-		p_velocities[i] += gravity * dt;
 		double speed = p_velocities[i].length();
 		if (speed > limit) {
 			p_velocities[i] *= limit / speed;
@@ -1423,11 +2533,13 @@ void FLIPWaterSimulation::_handle_collisions() {
 
 		p_positions[kept] = Vector2(x, y);
 		p_velocities[kept] = vel;
+		p_churn[kept] = p_churn[i];
 		kept++;
 	}
 
 	p_positions.resize(kept);
 	p_velocities.resize(kept);
+	p_churn.resize(kept);
 }
 
 void FLIPWaterSimulation::_push_particles_apart() {
@@ -1462,11 +2574,143 @@ void FLIPWaterSimulation::_push_particles_apart() {
 		cell_particle_ids[first_cell_particle[cell_nr]] = i;
 	}
 
+	// Churn reads the same neighbour lists, so it runs here, before collisions compact and reorder particles.
+	// Cohesion and viscosity share its pass over the neighbours, read from the same snapshot, and land after
+	// separation.
+	bool cohere = cohesion > 0.0 || viscosity > 0.0;
+	if (cohere) {
+		p_cohere.resize(num_particles);
+		p_smooth.resize(num_particles);
+	}
+	p_churn.resize(num_particles, 0.0f);
+	p_churn_next.resize(num_particles);
+	_run_parallel(num_particles, 1024, &FLIPWaterSimulation::_churn_range);
+	p_churn.swap(p_churn_next);
+
 	// Jacobi-style: each particle computes its own correction from a read-only snapshot, so this parallelises.
-	for (int iter = 0; iter < 2; iter++) {
+	for (int iter = 0; iter < separation_iterations; iter++) {
 		_run_parallel(num_particles, 1024, &FLIPWaterSimulation::_push_particles_range);
 		for (int i = 0; i < num_particles; i++) {
 			p_positions[i] += p_push[i];
+		}
+	}
+
+	if (cohere) {
+		for (int i = 0; i < num_particles; i++) {
+			p_positions[i] += p_cohere[i];
+			p_velocities[i] += p_smooth[i];
+		}
+	}
+}
+
+// Churn marks where water traps air: particles slamming into each other at speed, as when a splash lands,
+// a jet plunges into a pool or a wave falls onto the water. It is the average speed at which a particle and
+// its neighbours (within about a cell) close on each other, mapped from churn_low..churn_high to 0..1. Water
+// moving fast but smoothly has neighbours moving with it, so it scores nothing. A particle keeps its peak and
+// lets it fade at churn_fade per second, so white water lingers after the impact.
+void FLIPWaterSimulation::_churn_range(int begin, int end) {
+	double reach = 2.0 * (2.2 * p_radius);
+	double reach2 = reach * reach;
+	float keep = static_cast<float>(std::exp(-churn_fade * step_dt));
+	double span = std::max(churn_high - churn_low, 1.0);
+	// Cohesion and viscosity reach two rest spacings; the pull is strongest halfway between one and two.
+	bool cohere = cohesion > 0.0 || viscosity > 0.0;
+	double rest = 2.0 * p_radius;
+	double c_reach = 2.0 * rest;
+	double c_reach2 = c_reach * c_reach;
+	double c_span = c_reach - rest;
+
+	for (int i = begin; i < end; i++) {
+		Vector2 xi = p_positions[i];
+		Vector2 vi = p_velocities[i];
+		int pxi = static_cast<int>(std::floor(xi.x * p_inv_spacing));
+		int pyi = static_cast<int>(std::floor(xi.y * p_inv_spacing));
+		double closing = 0.0;
+		double weight = 0.0;
+		Vector2 pull;
+		Vector2 flow;
+		double flow_w = 0.0;
+		int near = 0;
+
+		for (int xc = std::max(pxi - 2, 0); xc <= std::min(pxi + 2, p_num_x - 1); xc++) {
+			for (int yc = std::max(pyi - 2, 0); yc <= std::min(pyi + 2, p_num_y - 1); yc++) {
+				int cell_nr = xc + (p_num_x * yc);
+				for (int j = first_cell_particle[cell_nr]; j < first_cell_particle[cell_nr + 1]; j++) {
+					int id = cell_particle_ids[j];
+					if (id == i) {
+						continue;
+					}
+					Vector2 dx = xi - p_positions[id];
+					double d2 = dx.length_squared();
+					if (d2 > reach2 || d2 == 0.0) {
+						continue;
+					}
+					double d = std::sqrt(d2);
+					double w = 1.0 - (d / reach);
+					// Positive when the pair is getting closer.
+					double approach = -(vi - p_velocities[id]).dot(dx) / d;
+					closing += w * std::max(approach, 0.0);
+					weight += w;
+
+					if (!cohere || d2 >= c_reach2) {
+						continue;
+					}
+					near++;
+					double cw = 1.0 - (d / c_reach);
+					flow += (p_velocities[id] - vi) * cw;
+					flow_w += cw;
+					if (d > rest) {
+						double k = (d - rest) / c_span;
+						double bump = 4.0 * k * (1.0 - k);
+						pull -= dx * (bump * 0.5 * (d - rest) / d);
+					}
+				}
+			}
+		}
+
+		// A block beside the particle counts as water at rest: the particle sees, half a spacing inside the block, the
+		// neighbours it would have there (one level with it, one a spacing above and one below). Without them a
+		// particle at a wall has neighbours on one side only, the pull draws it about half a spacing off the wall, and
+		// the surface dips where it meets the wall like a bead of mercury, which reads as water at a small scale.
+		// They sit level with the particle, so they pull straight at the wall and never along it; and they only ever
+		// cancel a pull away from the wall, never add one toward it, so water does not cling to a wall or creep along
+		// it either: a wall is neutral. Floors need none (weight holds water down) and ceilings get none (water must
+		// not cling under a block).
+		if (cohesion > 0.0) {
+			int ci = static_cast<int>(std::floor(xi.x * f_inv_spacing));
+			int cj = static_cast<int>(std::floor(xi.y * f_inv_spacing));
+			for (int side = -1; side <= 1; side += 2) {
+				if (_is_cell_in_bounds(ci + side, cj) && s[(ci + side) + (f_num_x * cj)] != 0.0) {
+					continue;
+				}
+				double face = (side < 0 ? ci : ci + 1) * cell_size;
+				double gx = std::abs(xi.x - face) + p_radius;
+				double toward = 0.0;
+				for (int row = -1; row <= 1; row++) {
+					double gy = row * rest;
+					double d2 = (gx * gx) + (gy * gy);
+					if (d2 >= c_reach2) {
+						continue;
+					}
+					near++;
+					double d = std::sqrt(d2);
+					if (d > rest) {
+						double k = (d - rest) / c_span;
+						toward += gx * (4.0 * k * (1.0 - k) * 0.5 * (d - rest) / d);
+					}
+				}
+				double away = -side * pull.x;
+				if (away > 0.0) {
+					pull.x += side * std::min(toward, away);
+				}
+			}
+		}
+
+		float now = weight > 0.0 ? static_cast<float>(std::clamp(((closing / weight) - churn_low) / span, 0.0, 1.0)) : 0.0f;
+		p_churn_next[i] = std::max(p_churn[i] * keep, now);
+		if (cohere) {
+			p_cohere[i] = near > 0 ? pull * (cohesion / near) : Vector2();
+			p_smooth[i] = flow_w > 0.0 ? flow * (viscosity / flow_w) : Vector2();
 		}
 	}
 }
@@ -1537,7 +2781,7 @@ void FLIPWaterSimulation::_particles_to_grid() {
 		int xi = std::clamp(static_cast<int>(std::floor(p_positions[i].x * h1)), 0, f_num_x - 1);
 		int yi = std::clamp(static_cast<int>(std::floor(p_positions[i].y * h1)), 0, f_num_y - 1);
 		int cell_nr = xi + (f_num_x * yi);
-		if (cell_types[cell_nr] == AIR_CELL) {
+		if (cell_types[cell_nr] == AIR_CELL && (spray_density <= 0.0 || p_densities[cell_nr] >= spray_density * _full_density(cell_nr))) {
 			cell_types[cell_nr] = FLUID_CELL;
 		}
 	}
@@ -1634,6 +2878,7 @@ void FLIPWaterSimulation::_grid_to_particles_range(int begin, int end) {
 			double dy = component == 0 ? h2 : 0.0;
 			const std::vector<double> &f = component == 0 ? u : v;
 			const std::vector<double> &prev_f = component == 0 ? prev_u : prev_v;
+			const std::vector<double> &wrote = component == 0 ? du : dv;
 
 			double x = std::clamp(static_cast<double>(p_positions[i].x), h, f_num_x * h);
 			double y = std::clamp(static_cast<double>(p_positions[i].y), h, f_num_y * h);
@@ -1656,7 +2901,10 @@ void FLIPWaterSimulation::_grid_to_particles_range(int begin, int end) {
 			double pic_v = 0.0;
 			double corr = 0.0;
 			for (int k = 0; k < 4; k++) {
-				if (cell_types[nr[k]] != SOLID_CELL && cell_types[nr[k] - offset] != SOLID_CELL) {
+				// A face no particle wrote to holds no flow: reading its zero would drag spray to a halt in mid-air.
+				bool open = cell_types[nr[k]] != SOLID_CELL && cell_types[nr[k] - offset] != SOLID_CELL;
+				bool solved = cell_types[nr[k]] == FLUID_CELL || cell_types[nr[k] - offset] == FLUID_CELL;
+				if (open && (solved || wrote[nr[k]] > 0.0)) {
 					total += w[k];
 					pic_v += w[k] * f[nr[k]];
 					corr += w[k] * (f[nr[k]] - prev_f[nr[k]]);
@@ -1673,6 +2921,11 @@ void FLIPWaterSimulation::_grid_to_particles_range(int begin, int end) {
 				}
 			}
 		}
+		// The next step's gravity, added now and not as that step starts, so that between steps a particle holds
+		// the velocity it is about to move with. Added at the start, water at rest held minus one step of gravity
+		// (the solve's answer to the fall it was about to be given), and everything that reads velocities (a body
+		// drifting with the current, a splat's stretch) saw still water rising at 16 px/s.
+		p_velocities[i] += gravity * step_dt;
 	}
 }
 
@@ -1700,21 +2953,33 @@ void FLIPWaterSimulation::_update_particle_density() {
 		p_densities[x0 + (f_num_x * y1)] += sx * ty;
 	}
 
-	if (p_rest_density == 0.0) {
-		double sum = 0.0;
-		double num_fluid_cells = 0.0;
+}
 
-		for (int i = 0; i < f_num_cells; i++) {
-			if (cell_types[i] == FLUID_CELL) {
-				sum += p_densities[i];
-				num_fluid_cells++;
-			}
-		}
-
-		if (num_fluid_cells > 0.0) {
-			p_rest_density = sum / num_fluid_cells;
-		}
+// What a cell's density reads when it is full of water: the rest density, less the share of the density kernel
+// that reaches into neighbouring rock (see _compute_drift_source).
+double FLIPWaterSimulation::_full_density(int idx) const {
+	int x = idx % f_num_x;
+	int y = idx / f_num_x;
+	if (x == 0 || y == 0 || x == f_num_x - 1 || y == f_num_y - 1) {
+		return p_rest_density;
 	}
+	double a = 0.5 - (p_radius / cell_size);
+	double per_rock_side = 1.0 - ((1.0 - a) * (1.0 - a) * 0.5);
+	double fx = 1.0;
+	double fy = 1.0;
+	if (s[idx - 1] == 0.0) {
+		fx *= per_rock_side;
+	}
+	if (s[idx + 1] == 0.0) {
+		fx *= per_rock_side;
+	}
+	if (s[idx - f_num_x] == 0.0) {
+		fy *= per_rock_side;
+	}
+	if (s[idx + f_num_x] == 0.0) {
+		fy *= per_rock_side;
+	}
+	return p_rest_density * fx * fy;
 }
 
 // Drift compensation pushes over-compressed fluid apart. Water with a free surface can expand into
@@ -1725,18 +2990,60 @@ void FLIPWaterSimulation::_update_particle_density() {
 void FLIPWaterSimulation::_compute_drift_source() {
 	std::fill(drift_source.begin(), drift_source.end(), 0.0);
 	if (p_rest_density <= 0.0 || drift_compensation <= 0.0) {
+		_apply_volume_sources();
 		return;
 	}
 
+	// Each cell's density is compared with what full water would read there. Next to rock that is less
+	// than the rest density: the density kernel reaches half a cell into the rock, and particles keep
+	// p_radius off its face, so a share of (1 - a)^2 / 2 of the kernel's weight per rock side stays
+	// empty (a = 0.5 - p_radius / h). Comparing wall cells with the plain rest density made full water
+	// there read thin, so the pull had to skip them, and water under a block's underside could thin out
+	// with nothing pulling it back.
+	//
+	// Compressed water is pushed apart everywhere. Thinned water is pulled together unless there is air
+	// in its 3x3 neighbourhood, since a cell next to the surface reads thin however full it is. Without
+	// the pull, pushing alone inflates a body into a sponge of thin pockets; without the push, gravity
+	// squeezes it.
 	double drift = drift_compensation * cell_size;
 	for (int i = 0; i < f_num_cells; i++) {
-		if (cell_types[i] == FLUID_CELL) {
+		if (cell_types[i] != FLUID_CELL) {
+			continue;
+		}
+		int x = i % f_num_x;
+		int y = i / f_num_x;
+		if (x == 0 || y == 0 || x == f_num_x - 1 || y == f_num_y - 1) {
 			double compression = p_densities[i] - p_rest_density;
 			if (compression > 0.0) {
 				drift_source[i] = drift * compression;
 			}
+			continue;
+		}
+
+		double compression = p_densities[i] - _full_density(i);
+		if (compression > 0.0) {
+			drift_source[i] = drift * compression;
+			continue;
+		}
+		if (!drift_pull) {
+			continue;
+		}
+
+		bool near_air = false;
+		for (int dy = -1; dy <= 1 && !near_air; dy++) {
+			for (int dx = -1; dx <= 1; dx++) {
+				if (cell_types[i + dx + (dy * f_num_x)] == AIR_CELL) {
+					near_air = true;
+					break;
+				}
+			}
+		}
+		if (!near_air) {
+			drift_source[i] = drift * compression;
 		}
 	}
+	// Before the sealed-pocket pass, so a pocket that cannot change volume evens them out too.
+	_apply_volume_sources();
 
 	std::fill(region_ids.begin(), region_ids.end(), -1);
 	int region = 0;
@@ -1785,11 +3092,61 @@ void FLIPWaterSimulation::_compute_drift_source() {
 	}
 }
 
+// A swirl flings particles out of its core, and the emptied cells would count as open air at zero pressure: a hole
+// opens in the water in a frame and slams shut when it collapses. Air enclosed by water (not reaching the border, not
+// held under a solid) and no bigger than void_fill_cells is solved as water instead. It reads empty, so drift
+// compensation pulls particles in and the core thins and refills gradually. Air bells under blocks, and big pockets
+// like a breaking wave's tube, stay air.
+void FLIPWaterSimulation::_fill_voids() {
+	if (void_fill_cells <= 0) {
+		return;
+	}
+	std::fill(region_ids.begin(), region_ids.end(), -1);
+	for (int start = 0; start < f_num_cells; start++) {
+		if (cell_types[start] != AIR_CELL || region_ids[start] != -1) {
+			continue;
+		}
+		bool sealed = true;
+		region_cells.clear();
+		region_stack.clear();
+		region_stack.push_back(start);
+		region_ids[start] = 0;
+		while (!region_stack.empty()) {
+			int idx = region_stack.back();
+			region_stack.pop_back();
+			region_cells.push_back(idx);
+			int i = idx % f_num_x;
+			int j = idx / f_num_x;
+			if (i == 0 || j == 0 || i == f_num_x - 1 || j == f_num_y - 1) {
+				sealed = false;
+				continue;
+			}
+			const int neighbours[4] = { idx - 1, idx + 1, idx - f_num_x, idx + f_num_x };
+			// Air under a ceiling is a held air bell; a block beside or below the pocket doesn't hold it.
+			if (cell_types[idx - f_num_x] == SOLID_CELL) {
+				sealed = false;
+			}
+			for (int nb : neighbours) {
+				if (cell_types[nb] == AIR_CELL && region_ids[nb] == -1) {
+					region_ids[nb] = 0;
+					region_stack.push_back(nb);
+				}
+			}
+		}
+		if (sealed && static_cast<int>(region_cells.size()) <= void_fill_cells) {
+			for (int idx : region_cells) {
+				cell_types[idx] = FLUID_CELL;
+			}
+		}
+	}
+}
+
 void FLIPWaterSimulation::_solve_incompressibility(double dt) {
 	std::fill(pressure.begin(), pressure.end(), 0.0);
 	prev_u = u;
 	prev_v = v;
 	solve_cp = DENSITY * cell_size / dt;
+	_fill_voids();
 	_compute_drift_source();
 
 	// Red-black Gauss-Seidel: cells of one colour share no faces, so each half-sweep can run in parallel.
@@ -1799,6 +3156,35 @@ void FLIPWaterSimulation::_solve_incompressibility(double dt) {
 		for (int color = 0; color < 2; color++) {
 			solve_color = color;
 			_run_parallel(f_num_y - 2, min_rows, &FLIPWaterSimulation::_solve_rows_range);
+		}
+	}
+}
+
+// Floors are otherwise frictionless: a jet hitting a ledge would turn all its speed sideways and fly off as a sheet.
+// Flow skimming over a solid below it (u faces in a cell on a floor) is braked like turbulent friction, by a rate that
+// grows with its speed: wall_drag per second at 500 px/s, a fifth of that at 100 px/s. Fast sheets lose their speed in
+// a block or two while slow water still runs freely, and walls and ceilings stay frictionless so nothing clings.
+void FLIPWaterSimulation::_apply_wall_drag(double dt) {
+	if (wall_drag <= 0.0) {
+		return;
+	}
+	double c = wall_drag * dt / 500.0;
+	auto solid = [&](int idx) { return cell_types[idx] == SOLID_CELL; };
+	for (int j = 1; j < f_num_y - 1; j++) {
+		for (int i = 1; i < f_num_x - 1; i++) {
+			int idx = i + (f_num_x * j);
+			if (solid(idx) || solid(idx - 1) || (cell_types[idx] != FLUID_CELL && cell_types[idx - 1] != FLUID_CELL)) {
+				continue;
+			}
+			int down = idx + f_num_x;
+			int floor = solid(down) ? down : solid(down - 1) ? down - 1 : -1;
+			if (floor < 0) {
+				continue;
+			}
+			// Implicit quadratic drag, so it never overshoots past the floor's own speed.
+			double target = solid_velocity[floor].x;
+			double rel = u[idx] - target;
+			u[idx] = target + rel / (1.0 + c * std::abs(rel));
 		}
 	}
 }
